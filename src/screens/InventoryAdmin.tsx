@@ -1,6 +1,6 @@
-import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
-import { AlertTriangle, Boxes, PackagePlus, RefreshCw, Scale } from 'lucide-react-native';
+import React, { useCallback, useEffect, useState } from 'react';
+import { ActivityIndicator, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { AlertTriangle, Boxes, ClipboardList, PackagePlus, RefreshCw, Scale, Search, X } from 'lucide-react-native';
 import { supabase } from '../lib/supabase';
 
 type StockItem = {
@@ -31,6 +31,34 @@ type RecipeCost = {
 };
 
 type RowInput = { quantity: string; cost: string; adjustment: string };
+type AuditRow = {
+  stock_item_id: string;
+  insumo: string;
+  unidad: string;
+  stock_actual: number;
+  stock_minimo: number;
+  costo_promedio: number;
+  ultimo_precio_compra: number | null;
+  ultima_fecha_compra: string | null;
+  total_comprado_historico: number;
+  total_consumido_produccion: number;
+  total_mermas: number;
+};
+type Partner = { id: string; name: string };
+type StockMovement = {
+  id: string;
+  stock_item_id: string;
+  quantity_delta?: number;
+  quantity?: number;
+  cantidad?: number;
+  unit_cost?: number;
+  costo_unitario?: number;
+  reason?: string;
+  movement_type?: string;
+  tipo?: string;
+  notes: string | null;
+  created_at: string;
+};
 
 const money = (value: number) => `$${Math.round(value).toLocaleString('es-AR')}`;
 const initialInput = (item: StockItem): RowInput => ({ quantity: '', cost: String(item.average_unit_cost), adjustment: '' });
@@ -38,7 +66,20 @@ const initialInput = (item: StockItem): RowInput => ({ quantity: '', cost: Strin
 export default function InventoryAdmin() {
   const [items, setItems] = useState<StockItem[]>([]);
   const [recipes, setRecipes] = useState<RecipeCost[]>([]);
+  const [auditRows, setAuditRows] = useState<AuditRow[]>([]);
+  const [partners, setPartners] = useState<Partner[]>([]);
   const [inputs, setInputs] = useState<Record<string, RowInput>>({});
+  const [activeSection, setActiveSection] = useState<'stock' | 'purchases' | 'audit'>('stock');
+  const [purchaseItemId, setPurchaseItemId] = useState('');
+  const [purchaseQuantity, setPurchaseQuantity] = useState('');
+  const [purchaseUnitCost, setPurchaseUnitCost] = useState('');
+  const [purchaseSupplier, setPurchaseSupplier] = useState('');
+  const [purchaseNotes, setPurchaseNotes] = useState('');
+  const [purchasePartnerId, setPurchasePartnerId] = useState('');
+  const [auditSearch, setAuditSearch] = useState('');
+  const [selectedAuditItem, setSelectedAuditItem] = useState<AuditRow | null>(null);
+  const [movementHistory, setMovementHistory] = useState<StockMovement[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
   const [productionQuantity, setProductionQuantity] = useState('1');
   const [salePrice, setSalePrice] = useState('20000');
   const [loading, setLoading] = useState(true);
@@ -46,22 +87,27 @@ export default function InventoryAdmin() {
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
 
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     if (!supabase) {
       setError('Supabase no está configurado.');
       setLoading(false);
       return;
     }
     setError('');
-    const [stockResult, recipeResult] = await Promise.all([
+    const [stockResult, recipeResult, auditResult, partnerResult] = await Promise.all([
       supabase.from('stock_items').select('id,sku,name,kind,unit,current_stock,minimum_stock,average_unit_cost,sale_price').eq('active', true).order('kind').order('name'),
       supabase.from('recipe_costs').select('recipe_id,product_id,product_name,sale_price,unit_sale_price,output_quantity,output_unit,total_recipe_cost,cost_per_output,gross_profit_per_output,gross_margin_percent,ingredients'),
+      supabase.from('v_stock_audit_summary').select('*').order('insumo'),
+      supabase.from('partners').select('id,name').eq('active', true).order('name'),
     ]);
     if (stockResult.error) setError(stockResult.error.message);
     else {
       const nextItems = (stockResult.data ?? []) as StockItem[];
       setItems(nextItems);
       setInputs((current) => Object.fromEntries(nextItems.filter((item) => item.kind === 'ingredient').map((item) => [item.id, current[item.id] ?? initialInput(item)])));
+      if (!purchaseItemId && nextItems.find((item) => item.kind === 'ingredient')) {
+        setPurchaseItemId(nextItems.find((item) => item.kind === 'ingredient')!.id);
+      }
     }
     if (recipeResult.error) setError((current) => current ? `${current} · ${recipeResult.error.message}` : recipeResult.error.message);
     else {
@@ -69,10 +115,14 @@ export default function InventoryAdmin() {
       setRecipes(nextRecipes);
       if (nextRecipes[0]?.sale_price != null) setSalePrice(String(nextRecipes[0].sale_price));
     }
+    if (auditResult.error) setError((current) => current ? `${current} · ${auditResult.error.message}` : auditResult.error.message);
+    else setAuditRows((auditResult.data ?? []) as AuditRow[]);
+    if (partnerResult.error) setError((current) => current ? `${current} · ${partnerResult.error.message}` : partnerResult.error.message);
+    else setPartners((partnerResult.data ?? []) as Partner[]);
     setLoading(false);
-  };
+  }, [purchaseItemId]);
 
-  useEffect(() => { void Promise.resolve().then(loadData); }, []);
+  useEffect(() => { void Promise.resolve().then(loadData); }, [loadData]);
 
   const updateInput = (itemId: string, key: keyof RowInput, value: string) => {
     setInputs((current) => ({ ...current, [itemId]: { ...current[itemId], [key]: value } }));
@@ -137,6 +187,47 @@ export default function InventoryAdmin() {
     updateInput(item.id, 'adjustment', '');
   }, `Ajuste registrado: ${item.name}.`);
 
+  const recordPurchase = () => runAction(async () => {
+    if (!supabase) throw new Error('Supabase no está configurado.');
+    const item = ingredientItems.find((candidate) => candidate.id === purchaseItemId);
+    const quantity = Number(purchaseQuantity);
+    const unitCost = Number(purchaseUnitCost);
+    if (!item) throw new Error('Selecciona un insumo.');
+    if (!Number.isFinite(quantity) || quantity <= 0) throw new Error('La cantidad debe ser mayor que cero.');
+    if (!Number.isFinite(unitCost) || unitCost <= 0) throw new Error('El precio unitario debe ser mayor que cero.');
+
+    const { error: insertError } = await supabase.from('stock_purchases').insert({
+      stock_item_id: item.id,
+      quantity,
+      unit_cost: unitCost,
+      supplier: purchaseSupplier.trim() || null,
+      notes: purchaseNotes.trim() || null,
+      partner_id: purchasePartnerId || null,
+    });
+    if (insertError) throw insertError;
+    setPurchaseQuantity('');
+    setPurchaseUnitCost('');
+    setPurchaseSupplier('');
+    setPurchaseNotes('');
+  }, 'Compra registrada; el trigger actualizó el stock y la auditoría.');
+
+  const openMovementHistory = async (row: AuditRow) => {
+    if (!supabase) return;
+    setSelectedAuditItem(row);
+    setMovementHistory([]);
+    setHistoryLoading(true);
+    setError('');
+    const { data, error: historyError } = await supabase
+      .from('stock_movements')
+      .select('*')
+      .eq('stock_item_id', row.stock_item_id)
+      .order('created_at', { ascending: false })
+      .limit(40);
+    if (historyError) setError(historyError.message);
+    else setMovementHistory((data ?? []) as StockMovement[]);
+    setHistoryLoading(false);
+  };
+
   const produceDozens = () => runAction(async () => {
     if (!supabase) throw new Error('Supabase no está configurado.');
     const product = recipes[0];
@@ -162,6 +253,8 @@ export default function InventoryAdmin() {
   }, 'Precio minorista actualizado.');
 
   const ingredientItems = items.filter((item) => item.kind === 'ingredient');
+  const selectedPurchaseItem = ingredientItems.find((item) => item.id === purchaseItemId);
+  const filteredAuditRows = auditRows.filter((row) => row.insumo.toLocaleLowerCase('es-AR').includes(auditSearch.trim().toLocaleLowerCase('es-AR')));
   const product = recipes[0];
   const productStock = product ? items.find((item) => item.id === product.product_id) : undefined;
 
@@ -184,6 +277,20 @@ export default function InventoryAdmin() {
       {!!notice && <Text style={styles.noticeBanner}>{notice}</Text>}
       {loading ? <ActivityIndicator color="#167957" style={styles.loader} /> : (
         <>
+          <View style={styles.adminTabs}>
+            {([
+              ['stock', 'Stock', Boxes],
+              ['purchases', 'Compras', PackagePlus],
+              ['audit', 'Auditoría', ClipboardList],
+            ] as const).map(([section, label, Icon]) => (
+              <Pressable key={section} onPress={() => setActiveSection(section)} style={[styles.adminTab, activeSection === section && styles.adminTabActive]} accessibilityRole="button">
+                <Icon size={15} color={activeSection === section ? '#fff' : '#476456'} />
+                <Text style={[styles.adminTabText, activeSection === section && styles.adminTabTextActive]}>{label}</Text>
+              </Pressable>
+            ))}
+          </View>
+
+          {activeSection === 'stock' && <>
           <View style={styles.summaryGrid}>
             <View style={styles.summaryPanel}>
               <View style={styles.sectionTitleRow}><Boxes size={18} color="#31634E" /><Text style={styles.sectionTitle}>Costo y precio por docena</Text></View>
@@ -253,11 +360,93 @@ export default function InventoryAdmin() {
             {!ingredientItems.length && <Text style={styles.emptyText}>No hay insumos cargados. Ejecuta la migración de costos en Supabase.</Text>}
           </View>
           <Text style={styles.footerNote}>Cada ingreso, merma, ajuste y producción queda guardado en el historial de inventario. Las acciones requieren una sesión owner.</Text>
+          </>}
+
+          {activeSection === 'purchases' && <View style={styles.auditPanel}>
+            <View style={styles.sectionTitleRow}><PackagePlus size={18} color="#31634E" /><Text style={styles.sectionTitle}>Registrar compra de insumos</Text></View>
+            <Text style={styles.formHint}>Al guardar, el trigger de Supabase actualiza existencias y registra el movimiento.</Text>
+
+            <Text style={styles.fieldLabel}>Insumo</Text>
+            <View style={styles.choiceRail}>
+              {ingredientItems.map((item) => <Pressable key={item.id} onPress={() => setPurchaseItemId(item.id)} style={[styles.choiceChip, purchaseItemId === item.id && styles.choiceChipActive]}><Text style={[styles.choiceChipText, purchaseItemId === item.id && styles.choiceChipTextActive]}>{item.name}</Text></Pressable>)}
+            </View>
+            {selectedPurchaseItem && <Text style={styles.formHint}>Unidad de compra: {selectedPurchaseItem.unit}</Text>}
+
+            <View style={styles.purchaseFields}>
+              <View style={styles.purchaseField}><Text style={styles.fieldLabel}>Cantidad ({selectedPurchaseItem?.unit ?? 'unidad'})</Text><TextInput value={purchaseQuantity} onChangeText={setPurchaseQuantity} keyboardType="decimal-pad" placeholder="Ej. 5" placeholderTextColor="#8A9990" style={styles.formInput} accessibilityLabel="Cantidad comprada" /></View>
+              <View style={styles.purchaseField}><Text style={styles.fieldLabel}>Precio por unidad</Text><TextInput value={purchaseUnitCost} onChangeText={setPurchaseUnitCost} keyboardType="decimal-pad" placeholder="Ej. 17000" placeholderTextColor="#8A9990" style={styles.formInput} accessibilityLabel="Precio unitario pagado" /></View>
+            </View>
+
+            <Text style={styles.fieldLabel}>Socio que registra</Text>
+            <View style={styles.choiceRail}>
+              <Pressable onPress={() => setPurchasePartnerId('')} style={[styles.choiceChip, !purchasePartnerId && styles.choiceChipActive]}><Text style={[styles.choiceChipText, !purchasePartnerId && styles.choiceChipTextActive]}>Sin asignar</Text></Pressable>
+              {partners.map((partner) => <Pressable key={partner.id} onPress={() => setPurchasePartnerId(partner.id)} style={[styles.choiceChip, purchasePartnerId === partner.id && styles.choiceChipActive]}><Text style={[styles.choiceChipText, purchasePartnerId === partner.id && styles.choiceChipTextActive]}>{partner.name}</Text></Pressable>)}
+            </View>
+
+            <View style={styles.purchaseFields}>
+              <View style={styles.purchaseField}><Text style={styles.fieldLabel}>Proveedor (opcional)</Text><TextInput value={purchaseSupplier} onChangeText={setPurchaseSupplier} placeholder="Carnicería, distribuidora..." placeholderTextColor="#8A9990" style={styles.formInput} accessibilityLabel="Proveedor" /></View>
+              <View style={styles.purchaseField}><Text style={styles.fieldLabel}>Notas (opcional)</Text><TextInput value={purchaseNotes} onChangeText={setPurchaseNotes} placeholder="Detalle de la compra" placeholderTextColor="#8A9990" style={styles.formInput} accessibilityLabel="Notas de compra" /></View>
+            </View>
+
+            <Pressable onPress={recordPurchase} disabled={busy || !ingredientItems.length} style={[styles.purchaseSubmit, (busy || !ingredientItems.length) && styles.buttonDisabled]}>
+              {busy ? <ActivityIndicator color="#fff" size="small" /> : <PackagePlus size={16} color="#fff" />}
+              <Text style={styles.primaryButtonText}>{busy ? 'Guardando compra…' : 'Guardar compra'}</Text>
+            </Pressable>
+          </View>}
+
+          {activeSection === 'audit' && <View style={styles.auditPanel}>
+            <View style={styles.sectionHeading}>
+              <View><Text style={styles.sectionTitle}>Auditoría de insumos</Text><Text style={styles.sectionHint}>Compras, costos, producción y mermas</Text></View>
+              <Text style={styles.itemCount}>{auditRows.length} insumos</Text>
+            </View>
+            <View style={styles.auditSearch}><Search size={15} color="#75847B" /><TextInput value={auditSearch} onChangeText={setAuditSearch} placeholder="Buscar insumo" placeholderTextColor="#8A9990" style={styles.auditSearchInput} accessibilityLabel="Buscar en auditoría" /></View>
+            {filteredAuditRows.map((row) => {
+              const isLow = Number(row.stock_actual) <= Number(row.stock_minimo);
+              return <Pressable key={row.stock_item_id} onPress={() => { void openMovementHistory(row); }} style={styles.auditRow} accessibilityRole="button">
+                <View style={styles.auditItemHead}><View style={styles.auditItemTitle}><Text style={styles.itemName}>{row.insumo}</Text>{isLow && <AlertTriangle size={14} color="#B65D30" />}</View><Text style={[styles.auditStock, isLow && styles.auditStockLow]}>{Number(row.stock_actual).toLocaleString('es-AR')} / {Number(row.stock_minimo).toLocaleString('es-AR')} {row.unidad}</Text></View>
+                <View style={styles.auditMetrics}>
+                  <AuditMetric label="Promedio ponderado" value={`${money(Number(row.costo_promedio))} / ${row.unidad}`} />
+                  <AuditMetric label="Último precio" value={row.ultimo_precio_compra == null ? 'Sin compras' : `${money(Number(row.ultimo_precio_compra))} / ${row.unidad}`} />
+                  <AuditMetric label="Última compra" value={row.ultima_fecha_compra ? new Date(row.ultima_fecha_compra).toLocaleDateString('es-AR') : '—'} />
+                </View>
+                <Text style={styles.auditTapHint}>Toca para ver movimientos recientes</Text>
+              </Pressable>;
+            })}
+            {!filteredAuditRows.length && <Text style={styles.emptyText}>{auditRows.length ? 'No hay coincidencias.' : 'La vista de auditoría todavía no tiene insumos.'}</Text>}
+          </View>}
         </>
       )}
       {busy && <View style={styles.busyLine}><ActivityIndicator size="small" color="#167957" /><Text style={styles.helperText}>Guardando movimiento…</Text></View>}
+      <Modal visible={!!selectedAuditItem} transparent animationType="slide" onRequestClose={() => setSelectedAuditItem(null)}>
+        <View style={styles.historyBackdrop}>
+          <View style={styles.historySheet}>
+            <View style={styles.historyHeader}><View><Text style={styles.historyTitle}>{selectedAuditItem?.insumo}</Text><Text style={styles.sectionHint}>Historial de stock</Text></View><Pressable onPress={() => setSelectedAuditItem(null)} style={styles.closeButton} accessibilityRole="button" accessibilityLabel="Cerrar historial"><X size={18} color="#335542" /></Pressable></View>
+            {selectedAuditItem && <Text style={styles.historySummary}>Actual: {Number(selectedAuditItem.stock_actual).toLocaleString('es-AR')} {selectedAuditItem.unidad} · Promedio: {money(Number(selectedAuditItem.costo_promedio))}/{selectedAuditItem.unidad}</Text>}
+            {historyLoading ? <ActivityIndicator color="#167957" style={styles.loader} /> : <ScrollView style={styles.historyList}>
+              {movementHistory.map((movement) => <View key={movement.id} style={styles.movementRow}>
+                <View style={styles.movementMain}><Text style={styles.itemName}>{movementReason(movement.reason ?? movement.movement_type ?? movement.tipo ?? 'Movimiento')}</Text><Text style={styles.itemMeta}>{new Date(movement.created_at).toLocaleString('es-AR')}{movement.notes ? ` · ${movement.notes}` : ''}</Text></View>
+                <View style={styles.movementValues}><Text style={[styles.movementDelta, movementQuantity(movement) < 0 && styles.movementNegative]}>{movementQuantity(movement) > 0 ? '+' : ''}{movementQuantity(movement).toLocaleString('es-AR')} {selectedAuditItem?.unidad}</Text><Text style={styles.itemMeta}>{money(Number(movement.unit_cost ?? movement.costo_unitario ?? 0))}/{selectedAuditItem?.unidad}</Text></View>
+              </View>)}
+              {!historyLoading && !movementHistory.length && <Text style={styles.emptyText}>No hay movimientos recientes para este insumo.</Text>}
+            </ScrollView>}
+          </View>
+        </View>
+      </Modal>
     </ScrollView>
   );
+}
+
+function AuditMetric({ label, value }: { label: string; value: string }) {
+  return <View style={styles.auditMetric}><Text style={styles.auditMetricLabel}>{label}</Text><Text style={styles.auditMetricValue}>{value}</Text></View>;
+}
+
+function movementReason(reason: string) {
+  const labels: Record<string, string> = { purchase: 'Compra', production_input: 'Consumo en producción', waste: 'Merma', adjustment: 'Ajuste', sale: 'Venta', sale_return: 'Devolución', production_output: 'Producción' };
+  return labels[reason] ?? reason.replaceAll('_', ' ');
+}
+
+function movementQuantity(movement: StockMovement) {
+  return Number(movement.quantity_delta ?? movement.quantity ?? movement.cantidad ?? 0);
 }
 
 const styles = StyleSheet.create({
@@ -314,4 +503,45 @@ const styles = StyleSheet.create({
   emptyText: { color: '#748279', fontSize: 11, lineHeight: 17 },
   footerNote: { color: '#738178', fontSize: 10, lineHeight: 15 },
   busyLine: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 8 },
+  adminTabs: { flexDirection: 'row', gap: 7, padding: 5, backgroundColor: '#E8EFEB', borderRadius: 9 },
+  adminTab: { flex: 1, minHeight: 40, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 6, paddingHorizontal: 8, borderRadius: 6 },
+  adminTabActive: { backgroundColor: '#1A5C43' },
+  adminTabText: { color: '#476456', fontSize: 11, fontWeight: '800' },
+  adminTabTextActive: { color: '#fff' },
+  auditPanel: { backgroundColor: '#fff', borderColor: '#E1E9E3', borderWidth: 1, borderRadius: 10, padding: 16, gap: 12 },
+  formHint: { color: '#718078', fontSize: 10, lineHeight: 15 },
+  fieldLabel: { color: '#3B5146', fontSize: 11, fontWeight: '800', marginTop: 2 },
+  choiceRail: { flexDirection: 'row', flexWrap: 'wrap', gap: 7 },
+  choiceChip: { minHeight: 33, justifyContent: 'center', paddingHorizontal: 11, backgroundColor: '#EDF3EF', borderRadius: 7 },
+  choiceChipActive: { backgroundColor: '#1A5C43' },
+  choiceChipText: { color: '#496456', fontSize: 10, fontWeight: '800' },
+  choiceChipTextActive: { color: '#fff' },
+  purchaseFields: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
+  purchaseField: { flex: 1, minWidth: 210, gap: 6 },
+  formInput: { minHeight: 40, borderWidth: 1, borderColor: '#DCE6DF', borderRadius: 7, paddingHorizontal: 10, color: '#2E473A', fontSize: 12, outlineStyle: 'none' as never },
+  purchaseSubmit: { minHeight: 43, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingHorizontal: 14, backgroundColor: '#1A5C43', borderRadius: 7 },
+  auditSearch: { minHeight: 40, flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 10, backgroundColor: '#F7FAF8', borderWidth: 1, borderColor: '#E0E8E2', borderRadius: 7 },
+  auditSearchInput: { flex: 1, color: '#31483C', fontSize: 11, outlineStyle: 'none' as never },
+  auditRow: { paddingVertical: 13, borderBottomWidth: 1, borderBottomColor: '#EDF2EE', gap: 9 },
+  auditItemHead: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 7 },
+  auditItemTitle: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  auditStock: { color: '#2F5941', fontSize: 11, fontWeight: '900' },
+  auditStockLow: { color: '#A94D32' },
+  auditMetrics: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  auditMetric: { flex: 1, minWidth: 135, padding: 9, backgroundColor: '#F6F9F7', borderRadius: 6, gap: 4 },
+  auditMetricLabel: { color: '#75847B', fontSize: 9, fontWeight: '700' },
+  auditMetricValue: { color: '#304A3A', fontSize: 10, fontWeight: '900' },
+  auditTapHint: { color: '#6B8877', fontSize: 9 },
+  historyBackdrop: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(15, 32, 23, 0.35)' },
+  historySheet: { maxHeight: '82%', paddingHorizontal: 18, paddingTop: 18, paddingBottom: 28, backgroundColor: '#F6F8F6', borderTopLeftRadius: 16, borderTopRightRadius: 16 },
+  historyHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingBottom: 12, borderBottomWidth: 1, borderBottomColor: '#E2EAE4' },
+  historyTitle: { color: '#203A30', fontSize: 18, fontWeight: '900' },
+  closeButton: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center', backgroundColor: '#E6EFE9', borderRadius: 8 },
+  historySummary: { color: '#456251', fontSize: 11, fontWeight: '800', paddingVertical: 12 },
+  historyList: { flexGrow: 0 },
+  movementRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10, paddingVertical: 12, borderTopWidth: 1, borderTopColor: '#E8EEEA' },
+  movementMain: { flex: 1, gap: 4 },
+  movementValues: { alignItems: 'flex-end', gap: 3 },
+  movementDelta: { color: '#23734B', fontSize: 11, fontWeight: '900' },
+  movementNegative: { color: '#B34E36' },
 });
