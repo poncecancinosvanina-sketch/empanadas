@@ -137,7 +137,15 @@ BEGIN
 END;
 $$;
 
-CREATE OR REPLACE VIEW recipe_costs WITH (security_invoker = true) AS
+ALTER TABLE public.stock_items
+  ADD COLUMN IF NOT EXISTS unit_sale_price numeric(14,2)
+  CHECK (unit_sale_price IS NULL OR unit_sale_price >= 0);
+
+UPDATE public.stock_items
+SET unit_sale_price = 1700
+WHERE kind = 'product' AND unit = 'dozen' AND unit_sale_price IS NULL;
+
+CREATE OR REPLACE VIEW public.recipe_costs WITH (security_invoker = true) AS
 SELECT r.id AS recipe_id,
        p.id AS product_id,
        p.name AS product_name,
@@ -162,13 +170,16 @@ SELECT r.id AS recipe_id,
          ) ORDER BY si.name) FILTER (WHERE ri.ingredient_id IS NOT NULL),
          '[]'::jsonb
       ) AS ingredients,
-      p.unit_sale_price
-FROM recipes r
-JOIN stock_items p ON p.id = r.product_id
-LEFT JOIN recipe_ingredients ri ON ri.recipe_id = r.id
-LEFT JOIN stock_items si ON si.id = ri.ingredient_id
+      COALESCE(p.unit_sale_price, 1700::numeric(14,2)) AS unit_sale_price
+  FROM public.recipes r
+  JOIN public.stock_items p ON p.id = r.product_id
+  LEFT JOIN public.recipe_ingredients ri ON ri.recipe_id = r.id
+  LEFT JOIN public.stock_items si ON si.id = ri.ingredient_id
 WHERE r.active = true AND p.active = true
 GROUP BY r.id, p.id, p.name, p.sale_price, p.unit_sale_price, r.output_quantity, r.output_unit;
+
+  GRANT SELECT ON public.recipe_costs TO authenticated;
+  NOTIFY pgrst, 'reload schema';
 
 CREATE OR REPLACE FUNCTION adjust_stock(
   p_stock_item_id uuid,

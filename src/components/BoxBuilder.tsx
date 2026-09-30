@@ -17,7 +17,7 @@ import { DOZEN_PRICE, EMPANADAS, UNIT_PRICE, useCartStore } from '../store/useCa
 import { BoxSize, FlavorKey } from '../types/empanada';
 
 const BOX_SIZES: BoxSize[] = [1, 12];
-const WHATSAPP_NUMBER = '5493855950969';
+const WHATSAPP_NUMBER = '5493855750969';
 
 export default function BoxBuilder() {
   const {
@@ -117,7 +117,7 @@ export default function BoxBuilder() {
     try {
       await Linking.openURL(`https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(message)}`);
     } catch {
-      Alert.alert('No se pudo abrir WhatsApp', 'Intenta nuevamente o escribe al +5493855950969.');
+      Alert.alert('No se pudo abrir WhatsApp', 'Intenta nuevamente o escribe al +54 9 385 575 0969.');
     } finally {
       setIsSendingOrder(false);
     }
