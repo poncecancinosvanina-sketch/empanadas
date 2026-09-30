@@ -37,6 +37,7 @@ export interface CartState {
   setBoxSize: (size: BoxSize) => void;
   replaceSelection: (flavors: BoxSlot[]) => void;
   addFlavor: (flavorId: FlavorKey) => void;
+  removeFlavor: (flavorId: FlavorKey) => void;
   replaceFlavorAt: (index: number, flavorId: FlavorKey) => void;
   removeFlavorAt: (index: number) => void;
   clearSelection: () => void;

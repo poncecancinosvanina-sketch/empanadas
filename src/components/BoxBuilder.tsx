@@ -4,19 +4,20 @@ import {
   Modal,
   Linking,
   Pressable,
+  TextInput,
   ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
 } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
-import { Check, MessageCircle, Plus, RotateCcw, ShoppingBag, Sparkles } from 'lucide-react-native';
+import { Check, MapPin, MessageCircle, Minus, Plus, RotateCcw, Search, ShoppingBag, Sparkles } from 'lucide-react-native';
 import { DOZEN_PRICE, EMPANADAS, UNIT_PRICE, useCartStore } from '../store/useCartStore';
 import { BoxSize, FlavorKey } from '../types/empanada';
 
 const BOX_SIZES: BoxSize[] = [1, 12];
+const FLAVOR_FILTERS = ['Todos', 'Carne', 'Vegetarianos'] as const;
 const WHATSAPP_NUMBER = '5493855750969';
 
 export default function BoxBuilder() {
@@ -25,6 +26,7 @@ export default function BoxBuilder() {
     selectedFlavors,
     setBoxSize,
     addFlavor,
+    removeFlavor,
     replaceFlavorAt,
     removeFlavorAt,
     clearSelection,
@@ -39,6 +41,8 @@ export default function BoxBuilder() {
   const [showOrderPage, setShowOrderPage] = useState(false);
   const [completed, setCompleted] = useState(false);
   const [isSendingOrder, setIsSendingOrder] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [activeFilter, setActiveFilter] = useState<(typeof FLAVOR_FILTERS)[number]>('Todos');
 
   const filledCount = getFilledCount();
   const remaining = getRemaining();
@@ -90,6 +94,17 @@ export default function BoxBuilder() {
   };
 
   const orderItems = selectedFlavors.filter(Boolean) as FlavorKey[];
+  const flavorCounts = orderItems.reduce<Partial<Record<FlavorKey, number>>>((counts, flavorId) => {
+    counts[flavorId] = (counts[flavorId] ?? 0) + 1;
+    return counts;
+  }, {});
+  const visibleFlavors = EMPANADAS.filter((flavor) => {
+    const matchesSearch = `${flavor.name} ${flavor.description}`.toLocaleLowerCase('es-AR').includes(searchQuery.trim().toLocaleLowerCase('es-AR'));
+    const matchesFilter = activeFilter === 'Todos'
+      || (activeFilter === 'Carne' && flavor.id === 'carne')
+      || (activeFilter === 'Vegetarianos' && flavor.id !== 'carne' && flavor.id !== 'pollo' && flavor.id !== 'jamon');
+    return matchesSearch && matchesFilter;
+  });
 
   const sendOrderToWhatsApp = async () => {
     const flavorCounts = orderItems.reduce<Record<string, number>>((counts, flavorId) => {
@@ -137,21 +152,22 @@ export default function BoxBuilder() {
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      <LinearGradient
-        colors={['#FFF8F1', '#FDEDDB', '#F9F2EC']}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={styles.headerGradient}
-      >
+      <View style={styles.marketHeader}>
         <View style={styles.topBar}>
-          <Text style={styles.kicker}>Empanadas gourmet</Text>
+          <View style={styles.brandLockup}>
+            <View style={styles.brandMark}><Text style={styles.brandEmoji}>🥟</Text></View>
+            <View><Text style={styles.kicker}>EMPANADAS GOURMET</Text><View style={styles.locationLine}><MapPin size={12} color="#53685D" /><Text style={styles.locationText}>Santiago del Estero · Retiro en local</Text></View></View>
+          </View>
           <Pressable onPress={() => setShowGuide(true)} style={styles.guideButton}>
             <Text style={styles.guideText}>Ver repulgues</Text>
           </Pressable>
         </View>
 
-        <Text style={styles.title}>Elegí formato y sabores</Text>
-        <Text style={styles.priceGuide}>Unidad ${UNIT_PRICE.toLocaleString('es-AR')} · Docena ${DOZEN_PRICE.toLocaleString('es-AR')}</Text>
+        <View style={styles.headlineBlock}>
+          <View style={styles.eyebrowPill}><View style={styles.onlineDot} /><Text style={styles.eyebrowText}>HECHAS HOY · PEDIDOS POR WHATSAPP</Text></View>
+          <Text style={styles.title}>Tu próxima docena,{ '\n' }recién salida del horno.</Text>
+          <Text style={styles.priceGuide}>Elegí una unidad o armá tu docena con tus sabores favoritos.</Text>
+        </View>
 
         <View style={styles.sizeSwitch}>
           {BOX_SIZES.map((size) => (
@@ -233,16 +249,27 @@ export default function BoxBuilder() {
             </View>
           )}
         </View>
-      </LinearGradient>
+      </View>
 
       <View style={styles.sectionWrap}>
         <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Sabores</Text>
+          <View><Text style={styles.sectionTitle}>¿Qué se te antoja?</Text><Text style={styles.sectionSubtitle}>Todos los sabores al mismo precio</Text></View>
+          <Text style={styles.flavorCount}>{EMPANADAS.length} sabores</Text>
         </View>
 
+        <View style={styles.searchBox}>
+          <Search size={17} color="#75847B" />
+          <TextInput value={searchQuery} onChangeText={setSearchQuery} placeholder="Buscar un sabor" placeholderTextColor="#8A9990" style={styles.searchInput} accessibilityLabel="Buscar sabores" />
+          {!!searchQuery && <Pressable onPress={() => setSearchQuery('')} accessibilityRole="button" accessibilityLabel="Limpiar búsqueda"><Text style={styles.clearSearch}>×</Text></Pressable>}
+        </View>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterRail}>
+          {FLAVOR_FILTERS.map((filter) => <Pressable key={filter} onPress={() => setActiveFilter(filter)} style={[styles.filterChip, activeFilter === filter && styles.filterChipActive]}><Text style={[styles.filterText, activeFilter === filter && styles.filterTextActive]}>{filter}</Text></Pressable>)}
+        </ScrollView>
+
         <View style={styles.flavorList}>
-          {EMPANADAS.map((flavor) => {
+          {visibleFlavors.map((flavor) => {
             const isSelected = selectedFlavor === flavor.id;
+            const quantity = flavorCounts[flavor.id] ?? 0;
 
             return (
               <Pressable
@@ -263,12 +290,18 @@ export default function BoxBuilder() {
                 <View style={styles.flavorInfo}>
                   <Text style={styles.flavorName}>{flavor.name}</Text>
                   <Text style={styles.flavorDesc}>{flavor.description}</Text>
+                  <Text style={styles.flavorUnitPrice}>${UNIT_PRICE.toLocaleString('es-AR')} / unidad</Text>
                 </View>
 
-                <Text style={[styles.flavorPrice, { color: flavor.color }]}>${UNIT_PRICE.toLocaleString('es-AR')} / unidad</Text>
+                <View style={styles.flavorActions}>
+                  {quantity > 0 && <Pressable onPress={(event) => { event.stopPropagation(); removeFlavor(flavor.id); }} style={styles.quantityButton} accessibilityRole="button" accessibilityLabel={`Quitar una ${flavor.name}`}><Minus size={15} color="#345B47" /></Pressable>}
+                  {quantity > 0 && <Text style={styles.quantityValue}>{quantity}</Text>}
+                  <Pressable onPress={(event) => { event.stopPropagation(); handleFlavorSelect(flavor.id); }} style={[styles.addButton, quantity > 0 && styles.addButtonSelected]} accessibilityRole="button" accessibilityLabel={`Agregar una ${flavor.name}`}><Plus size={17} color={quantity > 0 ? '#fff' : '#255B42'} /></Pressable>
+                </View>
               </Pressable>
             );
           })}
+          {visibleFlavors.length === 0 && <View style={styles.emptySearch}><Text style={styles.emptySearchTitle}>No encontramos ese sabor</Text><Text style={styles.emptySearchText}>Probá con otro nombre o elegí “Todos”.</Text></View>}
         </View>
       </View>
 
@@ -409,7 +442,7 @@ function RepulgueGuideModal({ visible, onClose }: RepulgueGuideModalProps) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F8F3EE',
+    backgroundColor: '#F4F7F5',
   },
   content: {
     paddingBottom: 120,
@@ -421,12 +454,29 @@ const styles = StyleSheet.create({
     borderBottomLeftRadius: 30,
     borderBottomRightRadius: 30,
   },
+  marketHeader: {
+    paddingHorizontal: 18,
+    paddingTop: 24,
+    paddingBottom: 18,
+    backgroundColor: '#EAF3ED',
+    borderBottomWidth: 1,
+    borderBottomColor: '#DCE9E0',
+  },
   topBar: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 8,
   },
+  brandLockup: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  brandMark: { width: 40, height: 40, borderRadius: 12, backgroundColor: '#174B39', alignItems: 'center', justifyContent: 'center' },
+  brandEmoji: { fontSize: 22 },
+  locationLine: { flexDirection: 'row', alignItems: 'center', gap: 3, marginTop: 3 },
+  locationText: { color: '#53685D', fontSize: 10, fontWeight: '600' },
+  headlineBlock: { marginTop: 20, marginBottom: 18 },
+  eyebrowPill: { alignSelf: 'flex-start', flexDirection: 'row', alignItems: 'center', gap: 7, paddingHorizontal: 10, paddingVertical: 6, backgroundColor: '#D9EADF', borderRadius: 999, marginBottom: 11 },
+  onlineDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: '#218354' },
+  eyebrowText: { color: '#2E6348', fontSize: 9, fontWeight: '900' },
   kicker: {
     color: '#A76546',
     fontSize: 12,
@@ -448,29 +498,28 @@ const styles = StyleSheet.create({
     color: '#513B30',
   },
   title: {
-    fontSize: 32,
+    fontSize: 30,
     fontWeight: '900',
-    color: '#1E170F',
-    marginBottom: 16,
+    color: '#173E30',
+    lineHeight: 36,
+    marginBottom: 8,
   },
   priceGuide: {
-    color: '#6F5848',
-    fontSize: 13,
-    fontWeight: '700',
-    marginTop: -9,
-    marginBottom: 15,
+    color: '#60766A',
+    fontSize: 12,
+    lineHeight: 18,
   },
   sizeSwitch: {
     flexDirection: 'row',
-    backgroundColor: '#F7EDE6',
-    borderRadius: 18,
+    backgroundColor: '#DDEAE1',
+    borderRadius: 12,
     padding: 5,
     marginBottom: 18,
   },
   sizeOption: {
     flex: 1,
     paddingVertical: 11,
-    borderRadius: 14,
+    borderRadius: 9,
     alignItems: 'center',
     borderWidth: 1,
   },
@@ -599,6 +648,16 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: '#1C160F',
   },
+  sectionSubtitle: { color: '#718178', fontSize: 11, marginTop: 4 },
+  flavorCount: { color: '#557062', fontSize: 10, fontWeight: '800' },
+  searchBox: { minHeight: 46, flexDirection: 'row', alignItems: 'center', gap: 9, paddingHorizontal: 13, backgroundColor: '#fff', borderWidth: 1, borderColor: '#DCE6DF', borderRadius: 10, marginBottom: 10 },
+  searchInput: { flex: 1, minWidth: 0, color: '#263E32', fontSize: 13, outlineStyle: 'none' as never },
+  clearSearch: { color: '#6F8076', fontSize: 21, paddingHorizontal: 4 },
+  filterRail: { gap: 7, paddingBottom: 13 },
+  filterChip: { paddingHorizontal: 13, paddingVertical: 8, backgroundColor: '#E9EFEB', borderRadius: 999 },
+  filterChipActive: { backgroundColor: '#174B39' },
+  filterText: { color: '#52695C', fontSize: 11, fontWeight: '800' },
+  filterTextActive: { color: '#fff' },
   sectionLink: {
     color: '#D94E28',
     fontWeight: '700',
@@ -659,9 +718,9 @@ const styles = StyleSheet.create({
   flavorCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 12,
+    padding: 11,
     borderWidth: 1.4,
-    borderRadius: 20,
+    borderRadius: 11,
     backgroundColor: '#fff',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 6 },
@@ -682,6 +741,7 @@ const styles = StyleSheet.create({
   },
   flavorInfo: {
     flex: 1,
+    minWidth: 0,
   },
   flavorName: {
     color: '#1B1713',
@@ -694,6 +754,15 @@ const styles = StyleSheet.create({
     fontSize: 12,
     lineHeight: 16,
   },
+  flavorUnitPrice: { color: '#477258', fontSize: 10, fontWeight: '800', marginTop: 5 },
+  flavorActions: { flexDirection: 'row', alignItems: 'center', gap: 7, marginLeft: 7 },
+  quantityButton: { width: 30, height: 30, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#D6E4DB', borderRadius: 8, backgroundColor: '#F4F8F5' },
+  quantityValue: { minWidth: 16, color: '#244A36', fontSize: 12, fontWeight: '900', textAlign: 'center' },
+  addButton: { width: 34, height: 34, alignItems: 'center', justifyContent: 'center', backgroundColor: '#E3EFE7', borderRadius: 9 },
+  addButtonSelected: { backgroundColor: '#1F6A48' },
+  emptySearch: { alignItems: 'center', paddingVertical: 28 },
+  emptySearchTitle: { color: '#294637', fontSize: 14, fontWeight: '900' },
+  emptySearchText: { color: '#75847B', fontSize: 11, marginTop: 5 },
   flavorPrice: {
     fontWeight: '900',
     fontSize: 15,

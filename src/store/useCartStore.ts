@@ -137,6 +137,14 @@ export const useCartStore = create<CartState>((set, get) => ({
     set({ selectedFlavors: next });
   },
 
+  removeFlavor: (flavorId) => {
+    const next = [...get().selectedFlavors];
+    const index = next.lastIndexOf(flavorId);
+    if (index === -1) return;
+    next[index] = null;
+    set({ selectedFlavors: next });
+  },
+
   replaceFlavorAt: (index, flavorId) => {
     const next = [...get().selectedFlavors];
     next[index] = flavorId;
