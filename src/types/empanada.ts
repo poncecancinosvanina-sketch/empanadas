@@ -1,4 +1,4 @@
-export type BoxSize = 6 | 12;
+export type BoxSize = 1 | 12;
 export type FlavorKey =
   | 'carne'
   | 'queso'
@@ -40,7 +40,7 @@ export interface CartState {
   replaceFlavorAt: (index: number, flavorId: FlavorKey) => void;
   removeFlavorAt: (index: number) => void;
   clearSelection: () => void;
-  autofillPopular: () => void;
+  surpriseMe: () => void;
   getFilledCount: () => number;
   getRemaining: () => number;
   getSubtotal: () => number;

@@ -14,9 +14,18 @@ En Supabase Dashboard > SQL Editor, ejecuta en este orden:
 2. `database/supabase-security.sql`
 3. `database/empanada-costing.sql`
 
+Los tres scripts se pueden volver a ejecutar, siempre en este orden. Si se repite el esquema base, vuelve a correr después el script de seguridad y luego el de costos para dejar wrappers, permisos y parametrización en el estado final esperado.
+
+Si la app muestra `Could not find the table 'public.recipe_costs' in the schema cache`, ejecuta `database/empanada-costing.sql` en el SQL Editor del mismo proyecto de Supabase configurado en Vercel. El script crea/actualiza la vista y envía `NOTIFY pgrst, 'reload schema'` al confirmar la transacción. Puedes verificar la vista desde SQL Editor con:
+
+```sql
+SELECT to_regclass('public.recipe_costs');
+SELECT name, current_stock, average_unit_cost FROM public.stock_items WHERE kind = 'ingredient' ORDER BY name;
+```
+
 La segunda migración habilita RLS, restringe el acceso a socios y reemplaza las funciones de escritura por wrappers que verifican el rol antes de ejecutarse. La tercera carga el stock inicial una sola vez, parametriza la receta y el precio, habilita mermas/ajustes y genera automáticamente producto faltante desde la receta al confirmar una venta.
 
-La receta configurada produce una docena: 0,333333 kg de harina, 0,083333 kg de grasa, 0,2 kg de carne, 1 huevo, 0,3 kg de cebolla y 0,06 kg de pimiento. Con los costos iniciales indicados, el costo de materia prima esperado es aproximadamente `$4.835` por docena; con precio minorista `$20.000`, la ganancia bruta esperada es `$15.165` (margen bruto aproximado `75,83%`). No incluye mano de obra, energía, envases, impuestos ni comisiones.
+La receta configurada produce una docena: 0,333333 kg de harina, 0,083333 kg de grasa, 0,2 kg de carne, 1 huevo, 0,3 kg de cebolla y 0,06 kg de pimiento. El catálogo usa un precio uniforme de `$1.700` por unidad y `$20.000` por docena completa para todos los sabores. La migración persiste ambos valores en productos; con los costos iniciales, el costo de materia prima esperado es aproximadamente `$4.835` por docena y la ganancia bruta `$15.165` (margen aproximado `75,83%`), antes de mano de obra, energía, envases, impuestos y comisiones.
 
 ## 3. Crear las cuentas de los socios
 

@@ -1,12 +1,24 @@
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
-CREATE TYPE stock_item_kind AS ENUM ('ingredient', 'product');
-CREATE TYPE production_status AS ENUM ('draft', 'completed', 'cancelled');
-CREATE TYPE order_status AS ENUM ('pending', 'confirmed', 'preparing', 'on_the_way', 'delivered', 'cancelled');
-CREATE TYPE payment_status AS ENUM ('pending', 'paid', 'refunded');
-CREATE TYPE financial_entry_kind AS ENUM ('income', 'refund', 'direct_cost', 'cost_reversal', 'fixed_cost', 'inventory_purchase', 'partner_contribution', 'partner_withdrawal');
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'stock_item_kind' AND typnamespace = 'public'::regnamespace) THEN
+    CREATE TYPE public.stock_item_kind AS ENUM ('ingredient', 'product');
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'production_status' AND typnamespace = 'public'::regnamespace) THEN
+    CREATE TYPE public.production_status AS ENUM ('draft', 'completed', 'cancelled');
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'order_status' AND typnamespace = 'public'::regnamespace) THEN
+    CREATE TYPE public.order_status AS ENUM ('pending', 'confirmed', 'preparing', 'on_the_way', 'delivered', 'cancelled');
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'payment_status' AND typnamespace = 'public'::regnamespace) THEN
+    CREATE TYPE public.payment_status AS ENUM ('pending', 'paid', 'refunded');
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'financial_entry_kind' AND typnamespace = 'public'::regnamespace) THEN
+    CREATE TYPE public.financial_entry_kind AS ENUM ('income', 'refund', 'direct_cost', 'cost_reversal', 'fixed_cost', 'inventory_purchase', 'partner_contribution', 'partner_withdrawal');
+  END IF;
+END $$;
 
-CREATE TABLE partners (
+CREATE TABLE IF NOT EXISTS partners (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   name text NOT NULL,
   ownership_percent numeric(5,2) NOT NULL CHECK (ownership_percent > 0 AND ownership_percent <= 100),
@@ -14,7 +26,7 @@ CREATE TABLE partners (
   created_at timestamptz NOT NULL DEFAULT now()
 );
 
-CREATE TABLE stock_items (
+CREATE TABLE IF NOT EXISTS stock_items (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   sku text UNIQUE,
   name text NOT NULL,
@@ -24,12 +36,15 @@ CREATE TABLE stock_items (
   minimum_stock numeric(14,3) NOT NULL DEFAULT 0 CHECK (minimum_stock >= 0),
   average_unit_cost numeric(14,4) NOT NULL DEFAULT 0 CHECK (average_unit_cost >= 0),
   sale_price numeric(14,2) CHECK (sale_price IS NULL OR sale_price >= 0),
+  unit_sale_price numeric(14,2) CHECK (unit_sale_price IS NULL OR unit_sale_price >= 0),
   active boolean NOT NULL DEFAULT true,
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now()
 );
 
-CREATE TABLE recipes (
+ALTER TABLE stock_items ADD COLUMN IF NOT EXISTS unit_sale_price numeric(14,2) CHECK (unit_sale_price IS NULL OR unit_sale_price >= 0);
+
+CREATE TABLE IF NOT EXISTS recipes (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   product_id uuid NOT NULL REFERENCES stock_items(id),
   version integer NOT NULL DEFAULT 1 CHECK (version > 0),
@@ -40,7 +55,7 @@ CREATE TABLE recipes (
   UNIQUE(product_id, version)
 );
 
-CREATE TABLE recipe_ingredients (
+CREATE TABLE IF NOT EXISTS recipe_ingredients (
   recipe_id uuid NOT NULL REFERENCES recipes(id) ON DELETE CASCADE,
   ingredient_id uuid NOT NULL REFERENCES stock_items(id),
   quantity numeric(14,4) NOT NULL CHECK (quantity > 0),
@@ -48,7 +63,7 @@ CREATE TABLE recipe_ingredients (
   PRIMARY KEY (recipe_id, ingredient_id)
 );
 
-CREATE TABLE production_orders (
+CREATE TABLE IF NOT EXISTS production_orders (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   order_number bigserial UNIQUE,
   product_id uuid NOT NULL REFERENCES stock_items(id),
@@ -64,7 +79,7 @@ CREATE TABLE production_orders (
   completed_at timestamptz NOT NULL DEFAULT now()
 );
 
-CREATE TABLE customer_orders (
+CREATE TABLE IF NOT EXISTS customer_orders (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   order_number bigserial UNIQUE,
   customer_name text NOT NULL,
@@ -81,7 +96,7 @@ CREATE TABLE customer_orders (
   created_at timestamptz NOT NULL DEFAULT now()
 );
 
-CREATE TABLE customer_order_items (
+CREATE TABLE IF NOT EXISTS customer_order_items (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   order_id uuid NOT NULL REFERENCES customer_orders(id) ON DELETE CASCADE,
   product_id uuid NOT NULL REFERENCES stock_items(id),
@@ -92,7 +107,7 @@ CREATE TABLE customer_order_items (
   line_total numeric(14,2) GENERATED ALWAYS AS (round(quantity * unit_price, 2)) STORED
 );
 
-CREATE TABLE inventory_movements (
+CREATE TABLE IF NOT EXISTS inventory_movements (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   stock_item_id uuid NOT NULL REFERENCES stock_items(id),
   quantity_delta numeric(14,3) NOT NULL CHECK (quantity_delta <> 0),
@@ -104,11 +119,11 @@ CREATE TABLE inventory_movements (
   created_at timestamptz NOT NULL DEFAULT now()
 );
 
-CREATE INDEX inventory_movements_item_created_idx ON inventory_movements(stock_item_id, created_at DESC);
-CREATE INDEX customer_orders_status_created_idx ON customer_orders(status, created_at DESC);
-CREATE INDEX production_orders_created_idx ON production_orders(created_at DESC);
+CREATE INDEX IF NOT EXISTS inventory_movements_item_created_idx ON inventory_movements(stock_item_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS customer_orders_status_created_idx ON customer_orders(status, created_at DESC);
+CREATE INDEX IF NOT EXISTS production_orders_created_idx ON production_orders(created_at DESC);
 
-CREATE TABLE financial_entries (
+CREATE TABLE IF NOT EXISTS financial_entries (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   kind financial_entry_kind NOT NULL,
   category text NOT NULL,
@@ -122,12 +137,13 @@ CREATE TABLE financial_entries (
   created_at timestamptz NOT NULL DEFAULT now()
 );
 
-CREATE INDEX financial_entries_occurred_idx ON financial_entries(occurred_on DESC, kind);
+CREATE INDEX IF NOT EXISTS financial_entries_occurred_idx ON financial_entries(occurred_on DESC, kind);
 
 INSERT INTO partners (name, ownership_percent)
 SELECT seed.name, seed.ownership_percent
 FROM (VALUES ('Socio 1', 50::numeric), ('Socio 2', 50::numeric)) AS seed(name, ownership_percent)
-WHERE NOT EXISTS (SELECT 1 FROM partners existing WHERE existing.name = seed.name);
+WHERE NOT EXISTS (SELECT 1 FROM partners existing WHERE existing.name = seed.name)
+ON CONFLICT DO NOTHING;
 
 CREATE OR REPLACE FUNCTION apply_production_order(
   p_product_id uuid,
@@ -370,7 +386,7 @@ BEGIN
 END;
 $$;
 
-CREATE VIEW partner_profit_distribution AS
+CREATE OR REPLACE VIEW partner_profit_distribution WITH (security_invoker = true) AS
 WITH period_totals AS (
   SELECT
     COALESCE(sum(amount) FILTER (WHERE kind = 'income'), 0) - COALESCE(sum(amount) FILTER (WHERE kind = 'refund'), 0) AS revenue,
@@ -391,30 +407,32 @@ SELECT p.id AS partner_id, p.name, p.ownership_percent,
 FROM partners p CROSS JOIN available a
 WHERE p.active = true;
 
-CREATE VIEW inventory_alerts AS
+CREATE OR REPLACE VIEW inventory_alerts WITH (security_invoker = true) AS
 SELECT id, sku, name, kind, unit, current_stock, minimum_stock,
        (minimum_stock - current_stock) AS reorder_quantity
 FROM stock_items
 WHERE active = true AND current_stock <= minimum_stock;
 
-CREATE VIEW products WITH (security_invoker = true) AS
+CREATE OR REPLACE VIEW products WITH (security_invoker = true) AS
 SELECT id, sku, name, unit, current_stock, minimum_stock, average_unit_cost,
-       sale_price, active, created_at, updated_at
+  sale_price, active, created_at, updated_at, unit_sale_price
 FROM stock_items
 WHERE kind = 'product'
 WITH LOCAL CHECK OPTION;
 
-CREATE VIEW ingredients WITH (security_invoker = true) AS
+CREATE OR REPLACE VIEW ingredients WITH (security_invoker = true) AS
 SELECT id, sku, name, unit, current_stock, minimum_stock, average_unit_cost,
        active, created_at, updated_at
 FROM stock_items
 WHERE kind = 'ingredient'
 WITH LOCAL CHECK OPTION;
 
-CREATE VIEW admin_daily_metrics AS
+CREATE OR REPLACE VIEW admin_daily_metrics WITH (security_invoker = true) AS
 SELECT
   COALESCE(sum(total) FILTER (WHERE status <> 'cancelled' AND created_at::date = current_date), 0) AS sales_today,
   count(*) FILTER (WHERE status <> 'cancelled' AND created_at::date = current_date) AS orders_today,
   COALESCE(avg(total) FILTER (WHERE status <> 'cancelled' AND created_at::date = current_date), 0) AS average_ticket_today,
   COALESCE(sum(total) FILTER (WHERE status <> 'cancelled' AND created_at >= now() - interval '7 days'), 0) AS sales_7d
 FROM customer_orders;
+
+NOTIFY pgrst, 'reload schema';

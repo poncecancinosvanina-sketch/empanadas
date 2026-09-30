@@ -1,6 +1,8 @@
+-- Run after schema.sql and supabase-security.sql. Safe to re-run.
 BEGIN;
 
 ALTER TABLE inventory_movements ADD COLUMN IF NOT EXISTS notes text;
+ALTER TABLE stock_items ADD COLUMN IF NOT EXISTS unit_sale_price numeric(14,2) CHECK (unit_sale_price IS NULL OR unit_sale_price >= 0);
 
 CREATE SCHEMA IF NOT EXISTS app_private;
 REVOKE ALL ON SCHEMA app_private FROM PUBLIC, anon, authenticated;
@@ -89,8 +91,8 @@ BEGIN
   FOR UPDATE;
 
   IF v_product_id IS NULL THEN
-    INSERT INTO stock_items(sku, name, kind, unit, current_stock, minimum_stock, average_unit_cost, sale_price)
-    VALUES ('product-beef-empanadas-dozen', 'Empanadas de carne (docena)', 'product', 'dozen', 0, 0, 0, 20000)
+    INSERT INTO stock_items(sku, name, kind, unit, current_stock, minimum_stock, average_unit_cost, sale_price, unit_sale_price)
+    VALUES ('product-beef-empanadas-dozen', 'Empanadas de carne (docena)', 'product', 'dozen', 0, 0, 0, 20000, 1700)
     RETURNING id INTO v_product_id;
   ELSE
     UPDATE stock_items
@@ -100,6 +102,12 @@ BEGIN
       active = true, updated_at = now()
     WHERE id = v_product_id;
   END IF;
+
+  UPDATE stock_items
+  SET sale_price = CASE WHEN unit = 'unit' THEN 1700 ELSE 20000 END,
+      unit_sale_price = 1700,
+      updated_at = now()
+  WHERE kind = 'product' AND active = true AND unit IN ('unit', 'dozen');
 
   INSERT INTO recipes(product_id, version, output_quantity, output_unit, active)
   VALUES (v_product_id, 1, 1, 'dozen', true)
@@ -153,13 +161,14 @@ SELECT r.id AS recipe_id,
            'line_cost', ri.quantity * si.average_unit_cost
          ) ORDER BY si.name) FILTER (WHERE ri.ingredient_id IS NOT NULL),
          '[]'::jsonb
-       ) AS ingredients
+      ) AS ingredients,
+      p.unit_sale_price
 FROM recipes r
 JOIN stock_items p ON p.id = r.product_id
 LEFT JOIN recipe_ingredients ri ON ri.recipe_id = r.id
 LEFT JOIN stock_items si ON si.id = ri.ingredient_id
 WHERE r.active = true AND p.active = true
-GROUP BY r.id, p.id, p.name, p.sale_price, r.output_quantity, r.output_unit;
+GROUP BY r.id, p.id, p.name, p.sale_price, p.unit_sale_price, r.output_quantity, r.output_unit;
 
 CREATE OR REPLACE FUNCTION adjust_stock(
   p_stock_item_id uuid,
@@ -237,5 +246,7 @@ REVOKE ALL ON FUNCTION confirm_customer_order(uuid, uuid) FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION confirm_customer_order(uuid, uuid) TO authenticated;
 
 GRANT SELECT ON recipe_costs TO authenticated;
+
+NOTIFY pgrst, 'reload schema';
 
 COMMIT;

@@ -1,4 +1,4 @@
--- Run this after schema.sql in the Supabase SQL Editor.
+-- Run after schema.sql. Safe to re-run after the schema has been initialized.
 -- Only users explicitly mapped to a partner with role 'owner' can access business data.
 
 CREATE TABLE IF NOT EXISTS partner_profiles (
@@ -102,11 +102,25 @@ BEGIN
 END;
 $$;
 
-REVOKE ALL ON FUNCTION apply_production_order_impl(uuid, numeric, uuid, text) FROM PUBLIC, anon, authenticated;
-REVOKE ALL ON FUNCTION confirm_customer_order_impl(uuid, uuid) FROM PUBLIC, anon, authenticated;
-REVOKE ALL ON FUNCTION cancel_customer_order_impl(uuid) FROM PUBLIC, anon, authenticated;
-REVOKE ALL ON FUNCTION record_expense_impl(financial_entry_kind, text, text, numeric, date, uuid, uuid) FROM PUBLIC, anon, authenticated;
-REVOKE ALL ON FUNCTION receive_stock_impl(uuid, numeric, numeric, uuid) FROM PUBLIC, anon, authenticated;
+DO $$
+BEGIN
+  IF to_regprocedure('public.apply_production_order_impl(uuid,numeric,uuid,text)') IS NOT NULL THEN
+    EXECUTE 'REVOKE ALL ON FUNCTION public.apply_production_order_impl(uuid, numeric, uuid, text) FROM PUBLIC, anon, authenticated';
+  END IF;
+  IF to_regprocedure('public.confirm_customer_order_impl(uuid,uuid)') IS NOT NULL THEN
+    EXECUTE 'REVOKE ALL ON FUNCTION public.confirm_customer_order_impl(uuid, uuid) FROM PUBLIC, anon, authenticated';
+  END IF;
+  IF to_regprocedure('public.cancel_customer_order_impl(uuid)') IS NOT NULL THEN
+    EXECUTE 'REVOKE ALL ON FUNCTION public.cancel_customer_order_impl(uuid) FROM PUBLIC, anon, authenticated';
+  END IF;
+  IF to_regprocedure('public.record_expense_impl(public.financial_entry_kind,text,text,numeric,date,uuid,uuid)') IS NOT NULL THEN
+    EXECUTE 'REVOKE ALL ON FUNCTION public.record_expense_impl(public.financial_entry_kind, text, text, numeric, date, uuid, uuid) FROM PUBLIC, anon, authenticated';
+  END IF;
+  IF to_regprocedure('public.receive_stock_impl(uuid,numeric,numeric,uuid)') IS NOT NULL THEN
+    EXECUTE 'REVOKE ALL ON FUNCTION public.receive_stock_impl(uuid, numeric, numeric, uuid) FROM PUBLIC, anon, authenticated';
+  END IF;
+END;
+$$;
 
 CREATE OR REPLACE FUNCTION apply_production_order(
   p_product_id uuid,
@@ -193,3 +207,5 @@ GRANT EXECUTE ON FUNCTION confirm_customer_order(uuid, uuid) TO authenticated;
 GRANT EXECUTE ON FUNCTION cancel_customer_order(uuid) TO authenticated;
 GRANT EXECUTE ON FUNCTION record_expense(financial_entry_kind, text, text, numeric, date, uuid, uuid) TO authenticated;
 GRANT EXECUTE ON FUNCTION receive_stock(uuid, numeric, numeric, uuid) TO authenticated;
+
+NOTIFY pgrst, 'reload schema';

@@ -1,5 +1,8 @@
 import { create } from 'zustand';
-import { BoxSize, BoxSlot, CartState, EmpanadaOption, FlavorKey } from '../types/empanada';
+import { BoxSize, BoxSlot, CartState, EmpanadaOption } from '../types/empanada';
+
+export const UNIT_PRICE = 1700;
+export const DOZEN_PRICE = 20000;
 
 export const EMPANADAS: EmpanadaOption[] = [
   {
@@ -8,7 +11,7 @@ export const EMPANADAS: EmpanadaOption[] = [
     description: 'Cebolla, huevo y especias',
     color: '#D94E28',
     accent: '#F7A13C',
-    price: 190,
+    price: UNIT_PRICE,
     popular: true,
     emoji: '🥩',
     repulgue: 'Redondo clásico',
@@ -19,7 +22,7 @@ export const EMPANADAS: EmpanadaOption[] = [
     description: 'Masa suave y queso fundido',
     color: '#F4C95D',
     accent: '#FFB800',
-    price: 180,
+    price: UNIT_PRICE,
     popular: true,
     emoji: '🧀',
     repulgue: 'Curva profunda',
@@ -30,7 +33,7 @@ export const EMPANADAS: EmpanadaOption[] = [
     description: 'Choclo, cebolla y queso',
     color: '#F9D774',
     accent: '#D6A647',
-    price: 200,
+    price: UNIT_PRICE,
     emoji: '🌽',
     repulgue: 'Cresta suave',
   },
@@ -40,7 +43,7 @@ export const EMPANADAS: EmpanadaOption[] = [
     description: 'Pollo desmenuzado con ajo',
     color: '#F5B38E',
     accent: '#D47A3C',
-    price: 185,
+    price: UNIT_PRICE,
     emoji: '🍗',
     repulgue: 'Forma rústica',
   },
@@ -50,7 +53,7 @@ export const EMPANADAS: EmpanadaOption[] = [
     description: 'Jamón y queso con toque ahumado',
     color: '#D96B36',
     accent: '#B1471F',
-    price: 210,
+    price: UNIT_PRICE,
     emoji: '🥪',
     repulgue: 'Media luna',
   },
@@ -60,7 +63,7 @@ export const EMPANADAS: EmpanadaOption[] = [
     description: 'Ricota fresca y cebollita',
     color: '#F1E6D2',
     accent: '#C7A768',
-    price: 195,
+    price: UNIT_PRICE,
     emoji: '🥛',
     repulgue: 'Redondo apretado',
   },
@@ -70,7 +73,7 @@ export const EMPANADAS: EmpanadaOption[] = [
     description: 'Cebolla caramelizada',
     color: '#D28F49',
     accent: '#9C4D1A',
-    price: 175,
+    price: UNIT_PRICE,
     emoji: '🧅',
     repulgue: 'Pliegue cerrado',
   },
@@ -80,7 +83,7 @@ export const EMPANADAS: EmpanadaOption[] = [
     description: 'Tomate, albahaca y queso',
     color: '#E97046',
     accent: '#9E2F1A',
-    price: 220,
+    price: UNIT_PRICE,
     emoji: '🍅',
     repulgue: 'Doble curva',
   },
@@ -89,10 +92,19 @@ export const EMPANADAS: EmpanadaOption[] = [
 const createEmptySelection = (size: BoxSize): BoxSlot[] =>
   Array.from({ length: size }, () => null);
 
+const shuffle = <T,>(items: T[]) => {
+  const shuffled = [...items];
+  for (let index = shuffled.length - 1; index > 0; index -= 1) {
+    const swapIndex = Math.floor(Math.random() * (index + 1));
+    [shuffled[index], shuffled[swapIndex]] = [shuffled[swapIndex], shuffled[index]];
+  }
+  return shuffled;
+};
+
 export const useCartStore = create<CartState>((set, get) => ({
-  boxSize: 6,
-  selectedFlavors: createEmptySelection(6),
-  promoLabel: 'Promo: 2x1 en 6-pack',
+  boxSize: 1,
+  selectedFlavors: createEmptySelection(1),
+  promoLabel: 'Precio docena',
 
   setBoxSize: (size) => {
     set({
@@ -102,8 +114,8 @@ export const useCartStore = create<CartState>((set, get) => ({
   },
 
   replaceSelection: (flavors) => {
-    const normalized = Array.isArray(flavors) ? flavors : createEmptySelection(6);
-    const nextSize = normalized.length >= 12 ? 12 : 6;
+    const normalized = Array.isArray(flavors) ? flavors : createEmptySelection(1);
+    const nextSize = normalized.length >= 12 ? 12 : 1;
     const selected = normalized.slice(0, nextSize).map((item) => item ?? null) as BoxSlot[];
 
     set({
@@ -139,15 +151,13 @@ export const useCartStore = create<CartState>((set, get) => ({
 
   clearSelection: () => set({ selectedFlavors: createEmptySelection(get().boxSize) }),
 
-  autofillPopular: () => {
-    const popular = EMPANADAS.filter((flavor) => flavor.popular).map((flavor) => flavor.id);
-    const next = createEmptySelection(get().boxSize);
-
-    for (let i = 0; i < get().boxSize; i += 1) {
-      next[i] = popular[i % popular.length];
+  surpriseMe: () => {
+    const flavorIds = EMPANADAS.map((flavor) => flavor.id);
+    const selection: typeof flavorIds = [];
+    while (selection.length < get().boxSize) {
+      selection.push(...shuffle(flavorIds).slice(0, get().boxSize - selection.length));
     }
-
-    set({ selectedFlavors: next });
+    set({ selectedFlavors: shuffle(selection) });
   },
 
   getFilledCount: () => get().selectedFlavors.filter(Boolean).length,
@@ -155,11 +165,8 @@ export const useCartStore = create<CartState>((set, get) => ({
   getRemaining: () => get().boxSize - get().getFilledCount(),
 
   getSubtotal: () => {
-    const selected = get().selectedFlavors.filter(Boolean) as FlavorKey[];
-    return selected.reduce((total, flavorId) => {
-      const item = EMPANADAS.find((flavor) => flavor.id === flavorId);
-      return total + (item?.price ?? 0);
-    }, 0);
+    const totalItems = get().selectedFlavors.filter(Boolean).length;
+    return totalItems === 12 ? DOZEN_PRICE : totalItems * UNIT_PRICE;
   },
 
   getSummary: () => {

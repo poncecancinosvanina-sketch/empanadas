@@ -2,6 +2,7 @@ import React, { useMemo, useState } from 'react';
 import {
   Alert,
   Modal,
+  Linking,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -11,50 +12,23 @@ import {
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
-import { Check, Plus, RotateCcw, ShoppingBag, Sparkles } from 'lucide-react-native';
-import { EMPANADAS, useCartStore } from '../store/useCartStore';
+import { Check, MessageCircle, Plus, RotateCcw, ShoppingBag, Sparkles } from 'lucide-react-native';
+import { DOZEN_PRICE, EMPANADAS, UNIT_PRICE, useCartStore } from '../store/useCartStore';
 import { BoxSize, FlavorKey } from '../types/empanada';
 
-const BOX_SIZES: BoxSize[] = [6, 12];
-
-const COMMERCIAL_COMBOS = [
-  {
-    id: 'combo-fiesta',
-    name: 'Combo Fiesta',
-    subtitle: '6 empanadas + bebida',
-    price: 1290,
-    emoji: '🎉',
-    flavors: ['carne', 'queso', 'humita', 'pollo', 'jamon', 'caprese'] as FlavorKey[],
-  },
-  {
-    id: 'combo-familiar',
-    name: 'Combo Familiar',
-    subtitle: '12 empanadas + 2 bebidas',
-    price: 2390,
-    emoji: '👨‍👩‍👧‍👦',
-    flavors: ['carne', 'queso', 'humita', 'pollo', 'jamon', 'ricota', 'cebolla', 'caprese', 'carne', 'queso', 'humita', 'pollo'] as FlavorKey[],
-  },
-  {
-    id: 'combo-premium',
-    name: 'Combo Premium',
-    subtitle: 'Selección gourmet',
-    price: 1550,
-    emoji: '✨',
-    flavors: ['caprese', 'ricota', 'cebolla', 'queso', 'carne', 'jamon'] as FlavorKey[],
-  },
-] as const;
+const BOX_SIZES: BoxSize[] = [1, 12];
+const WHATSAPP_NUMBER = '5493855950969';
 
 export default function BoxBuilder() {
   const {
     boxSize,
     selectedFlavors,
     setBoxSize,
-    replaceSelection,
     addFlavor,
     replaceFlavorAt,
     removeFlavorAt,
     clearSelection,
-    autofillPopular,
+    surpriseMe,
     getFilledCount,
     getRemaining,
     getSummary,
@@ -64,6 +38,7 @@ export default function BoxBuilder() {
   const [showGuide, setShowGuide] = useState(false);
   const [showOrderPage, setShowOrderPage] = useState(false);
   const [completed, setCompleted] = useState(false);
+  const [isSendingOrder, setIsSendingOrder] = useState(false);
 
   const filledCount = getFilledCount();
   const remaining = getRemaining();
@@ -86,7 +61,7 @@ export default function BoxBuilder() {
 
     if (filledCount >= boxSize) {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-      Alert.alert('Caja completa', 'Ya elegiste todas las empanadas de esta caja.');
+      Alert.alert('Compra completa', 'Ya elegiste todas las empanadas de este formato.');
       return;
     }
 
@@ -114,15 +89,51 @@ export default function BoxBuilder() {
     }
   };
 
-  const handleComboSelect = (combo: (typeof COMMERCIAL_COMBOS)[number]) => {
-    replaceSelection(combo.flavors as FlavorKey[]);
-    setSelectedFlavor(combo.flavors[0]);
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    setCompleted(true);
-    setTimeout(() => setCompleted(false), 1000);
+  const orderItems = selectedFlavors.filter(Boolean) as FlavorKey[];
+
+  const sendOrderToWhatsApp = async () => {
+    const flavorCounts = orderItems.reduce<Record<string, number>>((counts, flavorId) => {
+      counts[flavorId] = (counts[flavorId] ?? 0) + 1;
+      return counts;
+    }, {});
+    const itemLines = Object.entries(flavorCounts).map(([flavorId, quantity]) => {
+      const flavorName = EMPANADAS.find((flavor) => flavor.id === flavorId)?.name ?? flavorId;
+      return `- ${quantity} x ${flavorName}`;
+    });
+    const format = orderItems.length === 12 ? 'Docena' : 'Unidad';
+    const message = [
+      'Hola, quiero realizar este pedido:',
+      '',
+      ...itemLines,
+      '',
+      `Formato: ${format}`,
+      `Cantidad: ${orderItems.length} ${orderItems.length === 1 ? 'empanada' : 'empanadas'}`,
+      `Total: $${summary.finalTotal.toLocaleString('es-AR')}`,
+      '',
+      'Por favor, confirmen disponibilidad y coordinamos entrega y pago.',
+    ].join('\n');
+
+    setIsSendingOrder(true);
+    try {
+      await Linking.openURL(`https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(message)}`);
+    } catch {
+      Alert.alert('No se pudo abrir WhatsApp', 'Intenta nuevamente o escribe al +5493855950969.');
+    } finally {
+      setIsSendingOrder(false);
+    }
   };
 
-  const orderItems = selectedFlavors.filter(Boolean) as FlavorKey[];
+  if (showOrderPage) {
+    return (
+      <OrderPageModal
+        onClose={() => setShowOrderPage(false)}
+        onConfirm={sendOrderToWhatsApp}
+        isSending={isSendingOrder}
+        items={orderItems}
+        total={summary.finalTotal}
+      />
+    );
+  }
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
@@ -139,7 +150,8 @@ export default function BoxBuilder() {
           </Pressable>
         </View>
 
-        <Text style={styles.title}>Armá tu caja</Text>
+        <Text style={styles.title}>Elegí formato y sabores</Text>
+        <Text style={styles.priceGuide}>Unidad ${UNIT_PRICE.toLocaleString('es-AR')} · Docena ${DOZEN_PRICE.toLocaleString('es-AR')}</Text>
 
         <View style={styles.sizeSwitch}>
           {BOX_SIZES.map((size) => (
@@ -155,7 +167,7 @@ export default function BoxBuilder() {
               ]}
             >
               <Text style={[styles.sizeText, { color: boxSize === size ? '#fff' : '#3E2D26' }]}>
-                {size} uds
+                {size === 1 ? `Unidad · $${UNIT_PRICE.toLocaleString('es-AR')}` : `Docena · $${DOZEN_PRICE.toLocaleString('es-AR')}`}
               </Text>
             </Pressable>
           ))}
@@ -165,7 +177,7 @@ export default function BoxBuilder() {
           <View style={styles.progressMeta}>
             <Text style={styles.progressLabel}>Progreso</Text>
             <Text style={styles.progressValue}>
-              {filledCount}/{boxSize}
+              {filledCount}/{boxSize === 1 ? '1 unidad' : '12 unidades'}
             </Text>
           </View>
 
@@ -174,7 +186,7 @@ export default function BoxBuilder() {
           </View>
 
           <Text style={styles.helperText}>
-            {remaining > 0 ? `¡Faltan ${remaining} para completar!` : 'Caja completa 👏'}
+            {remaining > 0 ? `Agregá ${remaining} ${remaining === 1 ? 'empanada' : 'empanadas'} para completar tu compra.` : 'Compra completa 👏'}
           </Text>
 
           <View style={styles.slotGrid}>
@@ -204,7 +216,7 @@ export default function BoxBuilder() {
           </View>
 
           <View style={styles.actionsRow}>
-            <Pressable onPress={autofillPopular} style={styles.primaryAction}>
+            <Pressable onPress={surpriseMe} style={styles.primaryAction}>
               <Sparkles size={18} color="#fff" />
               <Text style={styles.primaryActionText}>Sorpréndeme</Text>
             </Pressable>
@@ -217,7 +229,7 @@ export default function BoxBuilder() {
           {completed && (
             <View style={styles.successToast}>
               <Check size={18} color="#fff" />
-              <Text style={styles.successToastText}>Caja completa</Text>
+              <Text style={styles.successToastText}>Compra completa</Text>
             </View>
           )}
         </View>
@@ -225,28 +237,7 @@ export default function BoxBuilder() {
 
       <View style={styles.sectionWrap}>
         <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Combos del día</Text>
-          <Pressable onPress={() => setShowGuide(true)}>
-            <Text style={styles.sectionLink}>Ver guía</Text>
-          </Pressable>
-        </View>
-
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.comboScrollContent}>
-          {COMMERCIAL_COMBOS.map((combo) => (
-            <Pressable key={combo.id} onPress={() => handleComboSelect(combo)} style={styles.comboCard}>
-              <Text style={styles.comboEmoji}>{combo.emoji}</Text>
-              <Text style={styles.comboTitle}>{combo.name}</Text>
-              <Text style={styles.comboSubtitle}>{combo.subtitle}</Text>
-              <View style={styles.comboFooter}>
-                <Text style={styles.comboPrice}>${combo.price}</Text>
-                <Text style={styles.comboAction}>Agregar</Text>
-              </View>
-            </Pressable>
-          ))}
-        </ScrollView>
-
-        <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Sabores favoritos</Text>
+          <Text style={styles.sectionTitle}>Sabores</Text>
         </View>
 
         <View style={styles.flavorList}>
@@ -274,7 +265,7 @@ export default function BoxBuilder() {
                   <Text style={styles.flavorDesc}>{flavor.description}</Text>
                 </View>
 
-                <Text style={[styles.flavorPrice, { color: flavor.color }]}>${flavor.price}</Text>
+                <Text style={[styles.flavorPrice, { color: flavor.color }]}>${UNIT_PRICE.toLocaleString('es-AR')} / unidad</Text>
               </Pressable>
             );
           })}
@@ -289,38 +280,43 @@ export default function BoxBuilder() {
 
         <View style={styles.totalWrap}>
           <Text style={styles.checkoutLabel}>Total</Text>
-          <Text style={styles.totalText}>${summary.finalTotal}</Text>
+          <Text style={styles.totalText}>${summary.finalTotal.toLocaleString('es-AR')}</Text>
         </View>
 
-        <Pressable style={styles.checkoutButton} onPress={() => setShowOrderPage(true)}>
+        <Pressable disabled={remaining > 0} style={[styles.checkoutButton, remaining > 0 && styles.checkoutDisabled]} onPress={() => setShowOrderPage(true)}>
           <ShoppingBag size={16} color="#fff" />
           <Text style={styles.checkoutText}>Checkout</Text>
         </Pressable>
       </View>
 
-      <OrderPageModal visible={showOrderPage} onClose={() => setShowOrderPage(false)} items={orderItems} total={summary.finalTotal} />
       <RepulgueGuideModal visible={showGuide} onClose={() => setShowGuide(false)} />
     </ScrollView>
   );
 }
 
 function OrderPageModal({
-  visible,
   onClose,
+  onConfirm,
+  isSending,
   items,
   total,
 }: {
-  visible: boolean;
   onClose: () => void;
+  onConfirm: () => void;
+  isSending: boolean;
   items: FlavorKey[];
   total: number;
 }) {
-  const selectedDetails = items
-    .map((id) => EMPANADAS.find((item) => item.id === id))
-    .filter(Boolean) as typeof EMPANADAS;
+  const flavorCounts = items.reduce<Partial<Record<FlavorKey, number>>>((counts, flavorId) => {
+    counts[flavorId] = (counts[flavorId] ?? 0) + 1;
+    return counts;
+  }, {});
+  const selectedDetails = Object.entries(flavorCounts).flatMap(([flavorId, quantity]) => {
+    const flavor = EMPANADAS.find((item) => item.id === flavorId);
+    return flavor && quantity ? [{ flavor, quantity }] : [];
+  });
 
   return (
-    <Modal transparent={false} animationType="slide" visible={visible} onRequestClose={onClose}>
       <View style={styles.orderPage}>
         <View style={styles.orderHeader}>
           <Pressable onPress={onClose} style={styles.backButton}>
@@ -332,41 +328,43 @@ function OrderPageModal({
           </View>
         </View>
 
-        <View style={styles.orderSummaryCard}>
-          <Text style={styles.summaryLabel}>Resumen</Text>
-          {selectedDetails.length === 0 ? (
-            <Text style={styles.emptyState}>Todavía no elegiste empanadas.</Text>
-          ) : (
-            selectedDetails.map((item) => (
-              <View key={item.id} style={styles.orderRow}>
-                <View style={styles.orderRowLeft}>
-                  <View style={[styles.orderRowBadge, { backgroundColor: item.color }]}>
-                    <Text style={styles.orderRowEmoji}>{item.emoji}</Text>
+        <ScrollView style={styles.orderScroll} contentContainerStyle={styles.orderScrollContent}>
+          <View style={styles.orderSummaryCard}>
+            <Text style={styles.summaryLabel}>Resumen</Text>
+            {selectedDetails.length === 0 ? (
+              <Text style={styles.emptyState}>Todavía no elegiste empanadas.</Text>
+            ) : (
+              selectedDetails.map(({ flavor, quantity }) => (
+                <View key={flavor.id} style={styles.orderRow}>
+                  <View style={styles.orderRowLeft}>
+                    <View style={[styles.orderRowBadge, { backgroundColor: flavor.color }]}>
+                      <Text style={styles.orderRowEmoji}>{flavor.emoji}</Text>
+                    </View>
+                    <Text style={styles.orderRowName}>{flavor.name}{quantity > 1 ? ` × ${quantity}` : ''}</Text>
                   </View>
-                  <Text style={styles.orderRowName}>{item.name}</Text>
+                  <Text style={styles.orderRowPrice}>${(UNIT_PRICE * quantity).toLocaleString('es-AR')}</Text>
                 </View>
-                <Text style={styles.orderRowPrice}>${item.price}</Text>
-              </View>
-            ))
-          )}
-        </View>
+              ))
+            )}
+            {items.length === 12 && <Text style={styles.dozenDiscount}>Docena: ${DOZEN_PRICE.toLocaleString('es-AR')} · Ahorrás ${(UNIT_PRICE * 12 - DOZEN_PRICE).toLocaleString('es-AR')}</Text>}
+          </View>
 
-        <View style={styles.deliveryCard}>
-          <Text style={styles.summaryLabel}>Entrega</Text>
-          <Text style={styles.deliveryText}>Av. Rivadavia 2045 · 18-25 min</Text>
-          <Text style={styles.deliveryText}>Pago: tarjeta · envío gratis</Text>
-        </View>
+          <View style={styles.deliveryCard}>
+            <Text style={styles.summaryLabel}>Confirmación</Text>
+            <Text style={styles.deliveryText}>El local confirmará disponibilidad, entrega y pago por WhatsApp.</Text>
+          </View>
 
-        <View style={styles.totalCard}>
-          <Text style={styles.totalCardLabel}>Total</Text>
-          <Text style={styles.bigTotal}>${total}</Text>
-        </View>
+          <View style={styles.totalCard}>
+            <Text style={styles.totalCardLabel}>Total</Text>
+            <Text style={styles.bigTotal}>${total.toLocaleString('es-AR')}</Text>
+          </View>
+        </ScrollView>
 
-        <Pressable style={styles.confirmButton} onPress={onClose}>
-          <Text style={styles.confirmButtonText}>Confirmar pedido</Text>
+        <Pressable accessibilityRole="button" style={[styles.confirmButton, isSending && styles.checkoutDisabled]} onPress={onConfirm} disabled={isSending}>
+          <MessageCircle size={17} color="#fff" />
+          <Text style={styles.confirmButtonText}>{isSending ? 'Abriendo WhatsApp…' : 'Enviar pedido por WhatsApp'}</Text>
         </Pressable>
       </View>
-    </Modal>
   );
 }
 
@@ -454,6 +452,13 @@ const styles = StyleSheet.create({
     fontWeight: '900',
     color: '#1E170F',
     marginBottom: 16,
+  },
+  priceGuide: {
+    color: '#6F5848',
+    fontSize: 13,
+    fontWeight: '700',
+    marginTop: -9,
+    marginBottom: 15,
   },
   sizeSwitch: {
     flexDirection: 'row',
@@ -739,6 +744,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 8,
   },
+  checkoutDisabled: {
+    opacity: 0.45,
+  },
   checkoutText: {
     color: '#fff',
     fontWeight: '800',
@@ -823,6 +831,12 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     marginBottom: 24,
   },
+  orderScroll: {
+    flex: 1,
+  },
+  orderScrollContent: {
+    paddingBottom: 8,
+  },
   backButton: {
     width: 40,
     height: 40,
@@ -862,6 +876,15 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.06,
     shadowRadius: 12,
     elevation: 4,
+  },
+  dozenDiscount: {
+    color: '#236648',
+    backgroundColor: '#E9F5ED',
+    borderRadius: 8,
+    padding: 10,
+    fontSize: 12,
+    fontWeight: '800',
+    marginTop: 2,
   },
   summaryLabel: {
     fontSize: 16,

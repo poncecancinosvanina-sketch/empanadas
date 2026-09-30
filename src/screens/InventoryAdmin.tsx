@@ -20,6 +20,7 @@ type RecipeCost = {
   product_id: string;
   product_name: string;
   sale_price: number | null;
+  unit_sale_price: number | null;
   output_quantity: number;
   output_unit: string;
   total_recipe_cost: number;
@@ -54,7 +55,7 @@ export default function InventoryAdmin() {
     setError('');
     const [stockResult, recipeResult] = await Promise.all([
       supabase.from('stock_items').select('id,sku,name,kind,unit,current_stock,minimum_stock,average_unit_cost,sale_price').eq('active', true).order('kind').order('name'),
-      supabase.from('recipe_costs').select('recipe_id,product_id,product_name,sale_price,output_quantity,output_unit,total_recipe_cost,cost_per_output,gross_profit_per_output,gross_margin_percent,ingredients'),
+      supabase.from('recipe_costs').select('recipe_id,product_id,product_name,sale_price,unit_sale_price,output_quantity,output_unit,total_recipe_cost,cost_per_output,gross_profit_per_output,gross_margin_percent,ingredients'),
     ]);
     if (stockResult.error) setError(stockResult.error.message);
     else {
@@ -156,7 +157,7 @@ export default function InventoryAdmin() {
     const parsedPrice = Number(salePrice);
     if (!product) throw new Error('No hay un producto con receta activa.');
     if (!Number.isFinite(parsedPrice) || parsedPrice < 0) throw new Error('Ingresa un precio de venta válido.');
-    const { error: updateError } = await supabase.from('stock_items').update({ sale_price: parsedPrice }).eq('id', product.product_id);
+    const { error: updateError } = await supabase.from('stock_items').update({ sale_price: parsedPrice, unit_sale_price: 1700 }).eq('kind', 'product').eq('unit', 'dozen');
     if (updateError) throw updateError;
   }, 'Precio minorista actualizado.');
 
@@ -190,6 +191,7 @@ export default function InventoryAdmin() {
                 <Text style={styles.productName}>{product.product_name}</Text>
                 <View style={styles.metricRow}><Text style={styles.metricLabel}>Costo receta / docena</Text><Text style={styles.metricValue}>{money(product.cost_per_output)}</Text></View>
                 <View style={styles.metricRow}><Text style={styles.metricLabel}>Precio minorista</Text><Text style={styles.metricValue}>{money(product.sale_price ?? 0)}</Text></View>
+                <View style={styles.metricRow}><Text style={styles.metricLabel}>Precio unitario</Text><Text style={styles.metricValue}>{money(product.unit_sale_price ?? 1700)}</Text></View>
                 <View style={styles.metricRow}><Text style={styles.metricLabel}>Ganancia bruta / docena</Text><Text style={styles.profitValue}>{money(product.gross_profit_per_output ?? 0)}</Text></View>
                 <View style={styles.metricRow}><Text style={styles.metricLabel}>Margen bruto</Text><Text style={styles.metricValue}>{Number(product.gross_margin_percent ?? 0).toLocaleString('es-AR')}%</Text></View>
                 <View style={styles.recipeBreakdown}>
