@@ -12,19 +12,20 @@ import {
   View,
 } from 'react-native';
 import * as Haptics from 'expo-haptics';
-import { Check, MapPin, MessageCircle, Minus, Plus, RotateCcw, Search, ShoppingBag, Sparkles } from 'lucide-react-native';
-import { DOZEN_PRICE, EMPANADAS, UNIT_PRICE, useCartStore } from '../store/useCartStore';
-import { BoxSize, FlavorKey } from '../types/empanada';
+import { Check, Clock3, ExternalLink, MapPin, MessageCircle, Minus, Plus, RotateCcw, Search, ShoppingBag, Sparkles } from 'lucide-react-native';
+import { DOZEN_PRICE, EMPANADAS, useCartStore } from '../store/useCartStore';
+import { FlavorKey } from '../types/empanada';
 
-const BOX_SIZES: BoxSize[] = [1, 12];
+const DOZEN_SIZE = 12;
 const FLAVOR_FILTERS = ['Todos', 'Carne', 'Vegetarianos'] as const;
-const WHATSAPP_NUMBER = '5493855750969';
+const WHATSAPP_NUMBER = '5493855950969';
+const MAPS_URL = 'https://share.google/mhKO208XNWMoPFDld';
+const STORE_ADDRESS = 'Sarmiento 216, Capital, Santiago del Estero';
 
 export default function BoxBuilder() {
   const {
-    boxSize,
     selectedFlavors,
-    setBoxSize,
+    addDozen,
     addFlavor,
     removeFlavor,
     replaceFlavorAt,
@@ -47,11 +48,13 @@ export default function BoxBuilder() {
   const filledCount = getFilledCount();
   const remaining = getRemaining();
   const summary = getSummary();
-  const progress = (filledCount / boxSize) * 100;
+  const progress = (filledCount / DOZEN_SIZE) * 100;
+  const completeDozens = Math.floor(summary.totalItems / DOZEN_SIZE);
+  const canCheckout = summary.totalItems > 0 && summary.totalItems % DOZEN_SIZE === 0;
 
   const slots = useMemo(
-    () => Array.from({ length: boxSize }, (_, index) => selectedFlavors[index]),
-    [selectedFlavors, boxSize],
+    () => selectedFlavors.slice(-DOZEN_SIZE),
+    [selectedFlavors],
   );
 
   const getFlavorById = (flavorId: FlavorKey | null) => {
@@ -63,16 +66,16 @@ export default function BoxBuilder() {
     const nextFilled = filledCount + 1;
     setSelectedFlavor(flavorId);
 
-    if (filledCount >= boxSize) {
+    if (filledCount >= DOZEN_SIZE) {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-      Alert.alert('Compra completa', 'Ya elegiste todas las empanadas de este formato.');
+      Alert.alert('Docena completa', 'Agrega otra docena para seguir eligiendo sabores.');
       return;
     }
 
     addFlavor(flavorId);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
 
-    if (nextFilled >= boxSize) {
+    if (nextFilled >= DOZEN_SIZE) {
       setCompleted(true);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       setTimeout(() => setCompleted(false), 1200);
@@ -80,22 +83,23 @@ export default function BoxBuilder() {
   };
 
   const handleSlotPress = (index: number) => {
-    const current = selectedFlavors[index];
+    const slotIndex = Math.max(0, selectedFlavors.length - DOZEN_SIZE) + index;
+    const current = selectedFlavors[slotIndex];
 
     if (current) {
-      removeFlavorAt(index);
+      removeFlavorAt(slotIndex);
       return;
     }
 
     if (selectedFlavor) {
-      replaceFlavorAt(index, selectedFlavor);
+      replaceFlavorAt(slotIndex, selectedFlavor);
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     }
   };
 
   const orderItems = selectedFlavors.filter(Boolean) as FlavorKey[];
-  const flavorCounts = orderItems.reduce<Partial<Record<FlavorKey, number>>>((counts, flavorId) => {
-    counts[flavorId] = (counts[flavorId] ?? 0) + 1;
+  const activeDozenCounts = slots.reduce<Partial<Record<FlavorKey, number>>>((counts, flavorId) => {
+    if (flavorId) counts[flavorId] = (counts[flavorId] ?? 0) + 1;
     return counts;
   }, {});
   const visibleFlavors = EMPANADAS.filter((flavor) => {
@@ -106,6 +110,23 @@ export default function BoxBuilder() {
     return matchesSearch && matchesFilter;
   });
 
+  const openMaps = async () => {
+    try {
+      await Linking.openURL(MAPS_URL);
+    } catch {
+      Alert.alert('No se pudo abrir el mapa', STORE_ADDRESS);
+    }
+  };
+
+  const openWhatsAppInquiry = async () => {
+    const message = 'Hola, quisiera hacer una consulta sobre las empanadas y coordinar un pedido/retiro.';
+    try {
+      await Linking.openURL(`https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(message)}`);
+    } catch {
+      Alert.alert('No se pudo abrir WhatsApp', 'Escríbenos al +54 9 385 595-0969.');
+    }
+  };
+
   const sendOrderToWhatsApp = async () => {
     const flavorCounts = orderItems.reduce<Record<string, number>>((counts, flavorId) => {
       counts[flavorId] = (counts[flavorId] ?? 0) + 1;
@@ -115,13 +136,13 @@ export default function BoxBuilder() {
       const flavorName = EMPANADAS.find((flavor) => flavor.id === flavorId)?.name ?? flavorId;
       return `- ${quantity} x ${flavorName}`;
     });
-    const format = orderItems.length === 12 ? 'Docena' : 'Unidad';
+    const dozenCount = orderItems.length / DOZEN_SIZE;
     const message = [
       'Hola, quiero realizar este pedido:',
       '',
       ...itemLines,
       '',
-      `Formato: ${format}`,
+      `Formato: ${dozenCount === 1 ? '1 docena' : `${dozenCount} docenas`}`,
       `Cantidad: ${orderItems.length} ${orderItems.length === 1 ? 'empanada' : 'empanadas'}`,
       `Total: $${summary.finalTotal.toLocaleString('es-AR')}`,
       '',
@@ -132,7 +153,7 @@ export default function BoxBuilder() {
     try {
       await Linking.openURL(`https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(message)}`);
     } catch {
-      Alert.alert('No se pudo abrir WhatsApp', 'Intenta nuevamente o escribe al +54 9 385 575 0969.');
+      Alert.alert('No se pudo abrir WhatsApp', 'Intenta nuevamente o escribe al +54 9 385 595-0969.');
     } finally {
       setIsSendingOrder(false);
     }
@@ -156,7 +177,7 @@ export default function BoxBuilder() {
         <View style={styles.topBar}>
           <View style={styles.brandLockup}>
             <View style={styles.brandMark}><Text style={styles.brandEmoji}>🥟</Text></View>
-            <View><Text style={styles.kicker}>EMPANADAS GOURMET</Text><View style={styles.locationLine}><MapPin size={12} color="#53685D" /><Text style={styles.locationText}>Santiago del Estero · Retiro en local</Text></View></View>
+            <View><Text style={styles.kicker}>EMPANADAS GOURMET</Text><Pressable onPress={openMaps} style={styles.locationLine} accessibilityRole="link" accessibilityLabel={`Abrir mapa de ${STORE_ADDRESS}`}><MapPin size={12} color="#53685D" /><Text style={styles.locationText}>{STORE_ADDRESS}</Text><ExternalLink size={11} color="#53685D" /></Pressable></View>
           </View>
           <Pressable onPress={() => setShowGuide(true)} style={styles.guideButton}>
             <Text style={styles.guideText}>Ver repulgues</Text>
@@ -166,34 +187,16 @@ export default function BoxBuilder() {
         <View style={styles.headlineBlock}>
           <View style={styles.eyebrowPill}><View style={styles.onlineDot} /><Text style={styles.eyebrowText}>COCINA CASERA · SANTIAGO DEL ESTERO</Text></View>
           <Text style={styles.title}>El sabor de casa,{ '\n' }hecho a mano.</Text>
-          <Text style={styles.priceGuide}>Recetas de bodegón, repulgue a repulgue. Elegí unidad o armá tu docena.</Text>
+          <Text style={styles.priceGuide}>Recetas de bodegón, repulgue a repulgue. Armá tu docena artesanal.</Text>
         </View>
 
-        <View style={styles.sizeSwitch}>
-          {BOX_SIZES.map((size) => (
-            <Pressable
-              key={size}
-              onPress={() => setBoxSize(size)}
-              style={[
-                styles.sizeOption,
-                {
-                  backgroundColor: boxSize === size ? '#5A2630' : '#F8F4EB',
-                  borderColor: boxSize === size ? '#5A2630' : '#D4C8B4',
-                },
-              ]}
-            >
-              <Text style={[styles.sizeText, { color: boxSize === size ? '#fff' : '#5A2630' }]}>
-                {size === 1 ? `Unidad · $${UNIT_PRICE.toLocaleString('es-AR')}` : `Docena · $${DOZEN_PRICE.toLocaleString('es-AR')}`}
-              </Text>
-            </Pressable>
-          ))}
-        </View>
+        <View style={styles.dozenPriceLine}><Text style={styles.dozenPriceLabel}>DOCENA ARTESANAL</Text><Text style={styles.dozenPrice}>{`$${DOZEN_PRICE.toLocaleString('es-AR')}`}</Text></View>
 
         <View style={styles.builderCard}>
           <View style={styles.progressMeta}>
             <Text style={styles.progressLabel}>Progreso</Text>
             <Text style={styles.progressValue}>
-              {filledCount}/{boxSize === 1 ? '1 unidad' : '12 unidades'}
+              {filledCount}/12 empanadas
             </Text>
           </View>
 
@@ -202,7 +205,7 @@ export default function BoxBuilder() {
           </View>
 
           <Text style={styles.helperText}>
-            {remaining > 0 ? `Agregá ${remaining} ${remaining === 1 ? 'empanada' : 'empanadas'} para completar tu compra.` : 'Compra completa 👏'}
+            {remaining > 0 ? `Agregá ${remaining} ${remaining === 1 ? 'empanada' : 'empanadas'} para completar esta docena.` : 'Docena completa · lista para pedir'}
           </Text>
 
           <View style={styles.slotGrid}>
@@ -240,6 +243,7 @@ export default function BoxBuilder() {
             <Pressable onPress={clearSelection} style={styles.secondaryAction}>
               <RotateCcw size={18} color="#554138" />
             </Pressable>
+            {remaining === 0 && summary.totalItems > 0 && <Pressable onPress={addDozen} style={styles.addDozenAction}><Plus size={17} color="#5A2630" /><Text style={styles.addDozenText}>Agregar otra docena</Text></Pressable>}
           </View>
 
           {completed && (
@@ -269,7 +273,7 @@ export default function BoxBuilder() {
         <View style={styles.flavorList}>
           {visibleFlavors.map((flavor) => {
             const isSelected = selectedFlavor === flavor.id;
-            const quantity = flavorCounts[flavor.id] ?? 0;
+            const quantity = activeDozenCounts[flavor.id] ?? 0;
 
             return (
               <Pressable
@@ -290,7 +294,7 @@ export default function BoxBuilder() {
                 <View style={styles.flavorInfo}>
                   <Text style={styles.flavorName}>{flavor.name}</Text>
                   <Text style={styles.flavorDesc}>{flavor.description}</Text>
-                  <Text style={styles.flavorUnitPrice}>${UNIT_PRICE.toLocaleString('es-AR')} / unidad</Text>
+                  <Text style={styles.flavorUnitPrice}>Parte de tu docena artesanal</Text>
                 </View>
 
                 <View style={styles.flavorActions}>
@@ -305,10 +309,30 @@ export default function BoxBuilder() {
         </View>
       </View>
 
+      <View style={styles.contactFooter}>
+        <View style={styles.footerRule}><View style={styles.footerRuleLine} /><Text style={styles.footerSeal}>DESDE NUESTRA COCINA</Text><View style={styles.footerRuleLine} /></View>
+        <Text style={styles.footerBrand}>Empanadas Gourmet</Text>
+        <Text style={styles.footerCopy}>Hechas a mano, para compartir en la mesa.</Text>
+        <Pressable onPress={openMaps} style={styles.footerAddress} accessibilityRole="link" accessibilityLabel={`Abrir mapa de ${STORE_ADDRESS}`}>
+          <MapPin size={17} color="#68764A" />
+          <View style={styles.footerContactCopy}><Text style={styles.footerContactLabel}>DIRECCIÓN</Text><Text style={styles.footerContactValue}>{STORE_ADDRESS}</Text></View>
+          <ExternalLink size={15} color="#68764A" />
+        </Pressable>
+        <View style={styles.footerAddress}>
+          <Clock3 size={17} color="#68764A" />
+          <View style={styles.footerContactCopy}><Text style={styles.footerContactLabel}>RETIRO</Text><Text style={styles.footerContactValue}>Coordiná el horario por WhatsApp</Text></View>
+        </View>
+        <Pressable onPress={openWhatsAppInquiry} style={styles.footerWhatsApp} accessibilityRole="button">
+          <MessageCircle size={18} color="#fff" />
+          <View style={styles.footerWhatsAppCopy}><Text style={styles.footerWhatsAppTitle}>Consultas / Pedidos por WhatsApp</Text><Text style={styles.footerWhatsAppNumber}>+54 9 385 595-0969</Text></View>
+          <ExternalLink size={14} color="#fff" />
+        </Pressable>
+      </View>
+
       <View style={styles.checkoutBar}>
         <View>
           <Text style={styles.checkoutLabel}>Pedido</Text>
-          <Text style={styles.checkoutValue}>{summary.totalItems} empanadas</Text>
+          <Text style={styles.checkoutValue}>{completeDozens} {completeDozens === 1 ? 'docena' : 'docenas'} · {summary.totalItems} empanadas</Text>
         </View>
 
         <View style={styles.totalWrap}>
@@ -316,9 +340,9 @@ export default function BoxBuilder() {
           <Text style={styles.totalText}>${summary.finalTotal.toLocaleString('es-AR')}</Text>
         </View>
 
-        <Pressable disabled={remaining > 0} style={[styles.checkoutButton, remaining > 0 && styles.checkoutDisabled]} onPress={() => setShowOrderPage(true)}>
+        <Pressable disabled={!canCheckout} style={[styles.checkoutButton, !canCheckout && styles.checkoutDisabled]} onPress={() => setShowOrderPage(true)}>
           <ShoppingBag size={16} color="#fff" />
-          <Text style={styles.checkoutText}>Checkout</Text>
+          <Text style={styles.checkoutText}>{canCheckout ? 'Pedir docena' : `Completa ${remaining} más`}</Text>
         </Pressable>
       </View>
 
@@ -356,9 +380,7 @@ function OrderPageModal({
             <Text style={styles.backButtonText}>←</Text>
           </Pressable>
           <Text style={styles.orderTitle}>Tu pedido</Text>
-          <View style={styles.orderBadge}>
-            <Text style={styles.orderBadgeText}>{items.length} items</Text>
-          </View>
+          <View style={styles.orderBadge}><Text style={styles.orderBadgeText}>{items.length / DOZEN_SIZE} {items.length === DOZEN_SIZE ? 'docena' : 'docenas'}</Text></View>
         </View>
 
         <ScrollView style={styles.orderScroll} contentContainerStyle={styles.orderScrollContent}>
@@ -375,11 +397,10 @@ function OrderPageModal({
                     </View>
                     <Text style={styles.orderRowName}>{flavor.name}{quantity > 1 ? ` × ${quantity}` : ''}</Text>
                   </View>
-                  <Text style={styles.orderRowPrice}>${(UNIT_PRICE * quantity).toLocaleString('es-AR')}</Text>
                 </View>
               ))
             )}
-            {items.length === 12 && <Text style={styles.dozenDiscount}>Docena: ${DOZEN_PRICE.toLocaleString('es-AR')} · Ahorrás ${(UNIT_PRICE * 12 - DOZEN_PRICE).toLocaleString('es-AR')}</Text>}
+            <Text style={styles.dozenDiscount}>{items.length / DOZEN_SIZE} {items.length === DOZEN_SIZE ? 'docena artesanal' : 'docenas artesanales'} · ${DOZEN_PRICE.toLocaleString('es-AR')} cada una</Text>
           </View>
 
           <View style={styles.deliveryCard}>
@@ -471,8 +492,8 @@ const styles = StyleSheet.create({
   brandLockup: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   brandMark: { width: 40, height: 40, borderRadius: 10, backgroundColor: '#5A2630', alignItems: 'center', justifyContent: 'center' },
   brandEmoji: { fontSize: 22 },
-  locationLine: { flexDirection: 'row', alignItems: 'center', gap: 3, marginTop: 3 },
-  locationText: { color: '#6E6252', fontSize: 10, fontWeight: '600' },
+  locationLine: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 4, marginTop: 3 },
+  locationText: { color: '#6E6252', fontSize: 10, fontWeight: '700', flexShrink: 1, textDecorationLine: 'underline' },
   headlineBlock: { marginTop: 20, marginBottom: 18 },
   eyebrowPill: { alignSelf: 'flex-start', flexDirection: 'row', alignItems: 'center', gap: 7, paddingHorizontal: 10, paddingVertical: 6, backgroundColor: '#DED2BB', borderRadius: 5, marginBottom: 11 },
   onlineDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: '#68764A' },
@@ -509,6 +530,9 @@ const styles = StyleSheet.create({
     fontSize: 12,
     lineHeight: 18,
   },
+  dozenPriceLine: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 14, paddingVertical: 11, marginBottom: 14, backgroundColor: '#5A2630', borderRadius: 7 },
+  dozenPriceLabel: { color: '#E9DCC8', fontSize: 10, fontWeight: '900', letterSpacing: 0.6 },
+  dozenPrice: { color: '#fff', fontSize: 18, fontWeight: '900' },
   sizeSwitch: {
     flexDirection: 'row',
     backgroundColor: '#D9CFBC',
@@ -588,6 +612,8 @@ const styles = StyleSheet.create({
   },
   actionsRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
     gap: 10,
   },
   primaryAction: {
@@ -613,6 +639,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  addDozenAction: { minHeight: 48, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7, paddingHorizontal: 12, backgroundColor: '#E8E0D0', borderWidth: 1, borderColor: '#D4C8B4', borderRadius: 7 },
+  addDozenText: { color: '#5A2630', fontSize: 11, fontWeight: '900' },
   successToast: {
     position: 'absolute',
     right: 18,
@@ -634,6 +662,20 @@ const styles = StyleSheet.create({
     paddingHorizontal: 18,
     marginTop: 22,
   },
+  contactFooter: { marginTop: 34, marginBottom: 16, marginHorizontal: 18, padding: 18, backgroundColor: '#E8E0D0', borderWidth: 1, borderColor: '#D4C8B4', borderRadius: 9, gap: 12 },
+  footerRule: { flexDirection: 'row', alignItems: 'center', gap: 9 },
+  footerRuleLine: { flex: 1, height: 1, backgroundColor: '#C8B99F' },
+  footerSeal: { color: '#68764A', fontSize: 8, fontWeight: '900', letterSpacing: 1 },
+  footerBrand: { color: '#5A2630', fontSize: 23, fontWeight: '900', textAlign: 'center' },
+  footerCopy: { color: '#776B59', fontSize: 11, textAlign: 'center', marginTop: -8 },
+  footerAddress: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 8, borderTopWidth: 1, borderTopColor: '#D4C8B4' },
+  footerContactCopy: { flex: 1, gap: 3 },
+  footerContactLabel: { color: '#68764A', fontSize: 8, fontWeight: '900', letterSpacing: 0.7 },
+  footerContactValue: { color: '#463A30', fontSize: 12, fontWeight: '700', lineHeight: 17 },
+  footerWhatsApp: { minHeight: 54, flexDirection: 'row', alignItems: 'center', gap: 11, paddingHorizontal: 13, paddingVertical: 9, backgroundColor: '#68764A', borderRadius: 7 },
+  footerWhatsAppCopy: { flex: 1, gap: 2 },
+  footerWhatsAppTitle: { color: '#fff', fontSize: 11, fontWeight: '900' },
+  footerWhatsAppNumber: { color: '#E7E8D9', fontSize: 10, fontWeight: '700' },
   sectionHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',

@@ -1,4 +1,3 @@
-export type BoxSize = 1 | 12;
 export type FlavorKey =
   | 'carne'
   | 'queso'
@@ -31,11 +30,9 @@ export interface CartSummary {
 }
 
 export interface CartState {
-  boxSize: BoxSize;
   selectedFlavors: BoxSlot[];
   promoLabel: string;
-  setBoxSize: (size: BoxSize) => void;
-  replaceSelection: (flavors: BoxSlot[]) => void;
+  addDozen: () => void;
   addFlavor: (flavorId: FlavorKey) => void;
   removeFlavor: (flavorId: FlavorKey) => void;
   replaceFlavorAt: (index: number, flavorId: FlavorKey) => void;

@@ -3,6 +3,7 @@ import { BoxSize, BoxSlot, CartState, EmpanadaOption } from '../types/empanada';
 
 export const UNIT_PRICE = 1700;
 export const DOZEN_PRICE = 20000;
+const DOZEN_SIZE = 12;
 
 export const EMPANADAS: EmpanadaOption[] = [
   {
@@ -89,7 +90,7 @@ export const EMPANADAS: EmpanadaOption[] = [
   },
 ];
 
-const createEmptySelection = (size: BoxSize): BoxSlot[] =>
+const createEmptySelection = (size: number = DOZEN_SIZE): BoxSlot[] =>
   Array.from({ length: size }, () => null);
 
 const shuffle = <T,>(items: T[]) => {
@@ -102,45 +103,40 @@ const shuffle = <T,>(items: T[]) => {
 };
 
 export const useCartStore = create<CartState>((set, get) => ({
-  boxSize: 1,
-  selectedFlavors: createEmptySelection(1),
+  boxSize: DOZEN_SIZE,
+  selectedFlavors: createEmptySelection(),
   promoLabel: 'Precio docena',
 
-  setBoxSize: (size) => {
-    set({
-      boxSize: size,
-      selectedFlavors: createEmptySelection(size),
-    });
-  },
-
-  replaceSelection: (flavors) => {
-    const normalized = Array.isArray(flavors) ? flavors : createEmptySelection(1);
-    const nextSize = normalized.length >= 12 ? 12 : 1;
-    const selected = normalized.slice(0, nextSize).map((item) => item ?? null) as BoxSlot[];
-
-    set({
-      boxSize: nextSize,
-      selectedFlavors: selected.length ? selected : createEmptySelection(nextSize),
-    });
+  addDozen: () => {
+    const { selectedFlavors } = get();
+    const activeDozenCount = selectedFlavors.slice(-DOZEN_SIZE).filter(Boolean).length;
+    if (activeDozenCount !== DOZEN_SIZE) return;
+    set({ selectedFlavors: [...selectedFlavors, ...createEmptySelection()] });
   },
 
   addFlavor: (flavorId) => {
     const { selectedFlavors } = get();
-    const firstEmptyIndex = selectedFlavors.findIndex((slot) => slot === null);
+    const activeDozenStart = Math.max(0, selectedFlavors.length - DOZEN_SIZE);
+    const emptySlot = selectedFlavors.slice(activeDozenStart).findIndex((slot) => slot === null);
 
-    if (firstEmptyIndex === -1) {
-      return;
-    }
+    if (emptySlot === -1) return;
 
     const next = [...selectedFlavors];
-    next[firstEmptyIndex] = flavorId;
+    next[activeDozenStart + emptySlot] = flavorId;
     set({ selectedFlavors: next });
   },
 
   removeFlavor: (flavorId) => {
     const next = [...get().selectedFlavors];
-    const index = next.lastIndexOf(flavorId);
-    if (index === -1) return;
+    const activeDozenStart = Math.max(0, next.length - DOZEN_SIZE);
+    let index = -1;
+    for (let slot = next.length - 1; slot >= activeDozenStart; slot -= 1) {
+      if (next[slot] === flavorId) {
+        index = slot;
+        break;
+      }
+    }
+    if (index < 0) return;
     next[index] = null;
     set({ selectedFlavors: next });
   },
@@ -157,24 +153,26 @@ export const useCartStore = create<CartState>((set, get) => ({
     set({ selectedFlavors: next });
   },
 
-  clearSelection: () => set({ selectedFlavors: createEmptySelection(get().boxSize) }),
+  clearSelection: () => set({ selectedFlavors: createEmptySelection() }),
 
   surpriseMe: () => {
     const flavorIds = EMPANADAS.map((flavor) => flavor.id);
     const selection: typeof flavorIds = [];
-    while (selection.length < get().boxSize) {
-      selection.push(...shuffle(flavorIds).slice(0, get().boxSize - selection.length));
+    while (selection.length < DOZEN_SIZE) {
+      selection.push(...shuffle(flavorIds).slice(0, DOZEN_SIZE - selection.length));
     }
-    set({ selectedFlavors: shuffle(selection) });
+    const existing = [...get().selectedFlavors];
+    existing.splice(existing.length - DOZEN_SIZE, DOZEN_SIZE, ...shuffle(selection));
+    set({ selectedFlavors: existing });
   },
 
-  getFilledCount: () => get().selectedFlavors.filter(Boolean).length,
+  getFilledCount: () => get().selectedFlavors.slice(-DOZEN_SIZE).filter(Boolean).length,
 
-  getRemaining: () => get().boxSize - get().getFilledCount(),
+  getRemaining: () => DOZEN_SIZE - get().getFilledCount(),
 
   getSubtotal: () => {
     const totalItems = get().selectedFlavors.filter(Boolean).length;
-    return totalItems === 12 ? DOZEN_PRICE : totalItems * UNIT_PRICE;
+    return Math.ceil(totalItems / DOZEN_SIZE) * DOZEN_PRICE;
   },
 
   getSummary: () => {
