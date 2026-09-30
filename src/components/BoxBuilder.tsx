@@ -164,9 +164,9 @@ export default function BoxBuilder() {
         </View>
 
         <View style={styles.headlineBlock}>
-          <View style={styles.eyebrowPill}><View style={styles.onlineDot} /><Text style={styles.eyebrowText}>HECHAS HOY · PEDIDOS POR WHATSAPP</Text></View>
-          <Text style={styles.title}>Tu próxima docena,{ '\n' }recién salida del horno.</Text>
-          <Text style={styles.priceGuide}>Elegí una unidad o armá tu docena con tus sabores favoritos.</Text>
+          <View style={styles.eyebrowPill}><View style={styles.onlineDot} /><Text style={styles.eyebrowText}>COCINA CASERA · SANTIAGO DEL ESTERO</Text></View>
+          <Text style={styles.title}>El sabor de casa,{ '\n' }hecho a mano.</Text>
+          <Text style={styles.priceGuide}>Recetas de bodegón, repulgue a repulgue. Elegí unidad o armá tu docena.</Text>
         </View>
 
         <View style={styles.sizeSwitch}>
@@ -177,12 +177,12 @@ export default function BoxBuilder() {
               style={[
                 styles.sizeOption,
                 {
-                  backgroundColor: boxSize === size ? '#D94E28' : '#F5E8DF',
-                  borderColor: boxSize === size ? '#D94E28' : '#F0DCCB',
+                  backgroundColor: boxSize === size ? '#5A2630' : '#F8F4EB',
+                  borderColor: boxSize === size ? '#5A2630' : '#D4C8B4',
                 },
               ]}
             >
-              <Text style={[styles.sizeText, { color: boxSize === size ? '#fff' : '#3E2D26' }]}>
+              <Text style={[styles.sizeText, { color: boxSize === size ? '#fff' : '#5A2630' }]}>
                 {size === 1 ? `Unidad · $${UNIT_PRICE.toLocaleString('es-AR')}` : `Docena · $${DOZEN_PRICE.toLocaleString('es-AR')}`}
               </Text>
             </Pressable>
@@ -224,7 +224,7 @@ export default function BoxBuilder() {
                   {flavor ? (
                     <Text style={styles.slotEmoji}>{flavor.emoji}</Text>
                   ) : (
-                    <Plus size={18} color="#9B6A4C" />
+                    <Plus size={18} color="#68764A" />
                   )}
                 </Pressable>
               );
@@ -442,7 +442,7 @@ function RepulgueGuideModal({ visible, onClose }: RepulgueGuideModalProps) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F4F7F5',
+    backgroundColor: '#F4EFE5',
   },
   content: {
     paddingBottom: 120,
@@ -458,9 +458,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 18,
     paddingTop: 24,
     paddingBottom: 18,
-    backgroundColor: '#EAF3ED',
+    backgroundColor: '#E8E0D0',
     borderBottomWidth: 1,
-    borderBottomColor: '#DCE9E0',
+    borderBottomColor: '#D4C8B4',
   },
   topBar: {
     flexDirection: 'row',
@@ -469,16 +469,16 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   brandLockup: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  brandMark: { width: 40, height: 40, borderRadius: 12, backgroundColor: '#174B39', alignItems: 'center', justifyContent: 'center' },
+  brandMark: { width: 40, height: 40, borderRadius: 10, backgroundColor: '#5A2630', alignItems: 'center', justifyContent: 'center' },
   brandEmoji: { fontSize: 22 },
   locationLine: { flexDirection: 'row', alignItems: 'center', gap: 3, marginTop: 3 },
-  locationText: { color: '#53685D', fontSize: 10, fontWeight: '600' },
+  locationText: { color: '#6E6252', fontSize: 10, fontWeight: '600' },
   headlineBlock: { marginTop: 20, marginBottom: 18 },
-  eyebrowPill: { alignSelf: 'flex-start', flexDirection: 'row', alignItems: 'center', gap: 7, paddingHorizontal: 10, paddingVertical: 6, backgroundColor: '#D9EADF', borderRadius: 999, marginBottom: 11 },
-  onlineDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: '#218354' },
-  eyebrowText: { color: '#2E6348', fontSize: 9, fontWeight: '900' },
+  eyebrowPill: { alignSelf: 'flex-start', flexDirection: 'row', alignItems: 'center', gap: 7, paddingHorizontal: 10, paddingVertical: 6, backgroundColor: '#DED2BB', borderRadius: 5, marginBottom: 11 },
+  onlineDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: '#68764A' },
+  eyebrowText: { color: '#59623F', fontSize: 9, fontWeight: '900' },
   kicker: {
-    color: '#A76546',
+    color: '#713E36',
     fontSize: 12,
     fontWeight: '800',
     textTransform: 'uppercase',
@@ -487,39 +487,39 @@ const styles = StyleSheet.create({
   guideButton: {
     paddingHorizontal: 12,
     paddingVertical: 8,
-    backgroundColor: '#fff',
-    borderRadius: 999,
+    backgroundColor: '#F8F4EB',
+    borderRadius: 6,
     borderWidth: 1,
-    borderColor: '#F2DFD0',
+    borderColor: '#D4C8B4',
   },
   guideText: {
     fontSize: 11,
     fontWeight: '700',
-    color: '#513B30',
+    color: '#5A2630',
   },
   title: {
     fontSize: 30,
     fontWeight: '900',
-    color: '#173E30',
+    color: '#4D2530',
     lineHeight: 36,
     marginBottom: 8,
   },
   priceGuide: {
-    color: '#60766A',
+    color: '#776B59',
     fontSize: 12,
     lineHeight: 18,
   },
   sizeSwitch: {
     flexDirection: 'row',
-    backgroundColor: '#DDEAE1',
-    borderRadius: 12,
+    backgroundColor: '#D9CFBC',
+    borderRadius: 8,
     padding: 5,
     marginBottom: 18,
   },
   sizeOption: {
     flex: 1,
     paddingVertical: 11,
-    borderRadius: 9,
+    borderRadius: 6,
     alignItems: 'center',
     borderWidth: 1,
   },
@@ -528,14 +528,11 @@ const styles = StyleSheet.create({
     fontSize: 14,
   },
   builderCard: {
-    backgroundColor: '#fff',
-    borderRadius: 26,
+    backgroundColor: '#FBF8F1',
+    borderRadius: 10,
     padding: 18,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 12 },
-    shadowOpacity: 0.08,
-    shadowRadius: 20,
-    elevation: 8,
+    borderWidth: 1,
+    borderColor: '#DDD2BF',
   },
   progressMeta: {
     flexDirection: 'row',
@@ -545,29 +542,29 @@ const styles = StyleSheet.create({
   },
   progressLabel: {
     fontWeight: '700',
-    color: '#614D40',
+    color: '#6B5D4C',
     fontSize: 13,
   },
   progressValue: {
     fontWeight: '800',
-    color: '#241B18',
+    color: '#3D302A',
     fontSize: 14,
   },
   progressBar: {
     height: 12,
     borderRadius: 999,
-    backgroundColor: '#F3E5D8',
+    backgroundColor: '#E8DDC9',
     overflow: 'hidden',
     marginBottom: 10,
   },
   progressFill: {
     height: '100%',
-    backgroundColor: '#D94E28',
+    backgroundColor: '#68764A',
     borderRadius: 999,
   },
   helperText: {
     fontSize: 14,
-    color: '#4E3E34',
+    color: '#655847',
     fontWeight: '700',
     marginBottom: 16,
   },
@@ -599,9 +596,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     gap: 8,
-    backgroundColor: '#D94E28',
+    backgroundColor: '#5A2630',
     paddingVertical: 14,
-    borderRadius: 16,
+    borderRadius: 7,
   },
   primaryActionText: {
     color: '#fff',
@@ -611,8 +608,8 @@ const styles = StyleSheet.create({
   secondaryAction: {
     width: 52,
     height: 52,
-    backgroundColor: '#F6EEE7',
-    borderRadius: 16,
+    backgroundColor: '#E8E0D0',
+    borderRadius: 7,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -620,7 +617,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     right: 18,
     top: 18,
-    backgroundColor: '#18B76D',
+    backgroundColor: '#68764A',
     borderRadius: 999,
     paddingHorizontal: 12,
     paddingVertical: 8,
@@ -646,20 +643,20 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 22,
     fontWeight: '800',
-    color: '#1C160F',
+    color: '#4D2530',
   },
-  sectionSubtitle: { color: '#718178', fontSize: 11, marginTop: 4 },
-  flavorCount: { color: '#557062', fontSize: 10, fontWeight: '800' },
-  searchBox: { minHeight: 46, flexDirection: 'row', alignItems: 'center', gap: 9, paddingHorizontal: 13, backgroundColor: '#fff', borderWidth: 1, borderColor: '#DCE6DF', borderRadius: 10, marginBottom: 10 },
-  searchInput: { flex: 1, minWidth: 0, color: '#263E32', fontSize: 13, outlineStyle: 'none' as never },
-  clearSearch: { color: '#6F8076', fontSize: 21, paddingHorizontal: 4 },
+  sectionSubtitle: { color: '#776B59', fontSize: 11, marginTop: 4 },
+  flavorCount: { color: '#68764A', fontSize: 10, fontWeight: '900' },
+  searchBox: { minHeight: 46, flexDirection: 'row', alignItems: 'center', gap: 9, paddingHorizontal: 13, backgroundColor: '#FBF8F1', borderWidth: 1, borderColor: '#D9CFBC', borderRadius: 7, marginBottom: 10 },
+  searchInput: { flex: 1, minWidth: 0, color: '#3B3329', fontSize: 13, outlineStyle: 'none' as never },
+  clearSearch: { color: '#776B59', fontSize: 21, paddingHorizontal: 4 },
   filterRail: { gap: 7, paddingBottom: 13 },
-  filterChip: { paddingHorizontal: 13, paddingVertical: 8, backgroundColor: '#E9EFEB', borderRadius: 999 },
-  filterChipActive: { backgroundColor: '#174B39' },
-  filterText: { color: '#52695C', fontSize: 11, fontWeight: '800' },
+  filterChip: { paddingHorizontal: 13, paddingVertical: 8, backgroundColor: '#E8E0D0', borderRadius: 6 },
+  filterChipActive: { backgroundColor: '#68764A' },
+  filterText: { color: '#665D4F', fontSize: 11, fontWeight: '800' },
   filterTextActive: { color: '#fff' },
   sectionLink: {
-    color: '#D94E28',
+    color: '#5A2630',
     fontWeight: '700',
     fontSize: 12,
   },
@@ -703,7 +700,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   comboPrice: {
-    color: '#D94E28',
+    color: '#5A2630',
     fontWeight: '900',
     fontSize: 18,
   },
@@ -720,13 +717,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: 11,
     borderWidth: 1.4,
-    borderRadius: 11,
-    backgroundColor: '#fff',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.06,
-    shadowRadius: 10,
-    elevation: 3,
+    borderRadius: 8,
+    backgroundColor: '#FBF8F1',
+    borderColor: '#DDD2BF',
   },
   flavorBadge: {
     width: 46,
@@ -744,25 +737,25 @@ const styles = StyleSheet.create({
     minWidth: 0,
   },
   flavorName: {
-    color: '#1B1713',
+    color: '#4D2530',
     fontWeight: '800',
     fontSize: 16,
     marginBottom: 2,
   },
   flavorDesc: {
-    color: '#7C675D',
+    color: '#766B5C',
     fontSize: 12,
     lineHeight: 16,
   },
-  flavorUnitPrice: { color: '#477258', fontSize: 10, fontWeight: '800', marginTop: 5 },
+  flavorUnitPrice: { color: '#68764A', fontSize: 10, fontWeight: '900', marginTop: 5 },
   flavorActions: { flexDirection: 'row', alignItems: 'center', gap: 7, marginLeft: 7 },
-  quantityButton: { width: 30, height: 30, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#D6E4DB', borderRadius: 8, backgroundColor: '#F4F8F5' },
-  quantityValue: { minWidth: 16, color: '#244A36', fontSize: 12, fontWeight: '900', textAlign: 'center' },
-  addButton: { width: 34, height: 34, alignItems: 'center', justifyContent: 'center', backgroundColor: '#E3EFE7', borderRadius: 9 },
-  addButtonSelected: { backgroundColor: '#1F6A48' },
+  quantityButton: { width: 30, height: 30, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#D6CBB8', borderRadius: 6, backgroundColor: '#F1EBDD' },
+  quantityValue: { minWidth: 16, color: '#5A2630', fontSize: 12, fontWeight: '900', textAlign: 'center' },
+  addButton: { width: 34, height: 34, alignItems: 'center', justifyContent: 'center', backgroundColor: '#E3E5D7', borderRadius: 6 },
+  addButtonSelected: { backgroundColor: '#68764A' },
   emptySearch: { alignItems: 'center', paddingVertical: 28 },
-  emptySearchTitle: { color: '#294637', fontSize: 14, fontWeight: '900' },
-  emptySearchText: { color: '#75847B', fontSize: 11, marginTop: 5 },
+  emptySearchTitle: { color: '#4D2530', fontSize: 14, fontWeight: '900' },
+  emptySearchText: { color: '#776B59', fontSize: 11, marginTop: 5 },
   flavorPrice: {
     fontWeight: '900',
     fontSize: 15,
@@ -772,17 +765,14 @@ const styles = StyleSheet.create({
     left: 18,
     right: 18,
     bottom: 18,
-    backgroundColor: '#1B140F',
-    borderRadius: 22,
+    backgroundColor: '#4B252E',
+    borderRadius: 9,
     paddingHorizontal: 16,
     paddingVertical: 14,
     flexDirection: 'row',
     alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 16 },
-    shadowOpacity: 0.2,
-    shadowRadius: 18,
-    elevation: 12,
+    borderWidth: 1,
+    borderColor: '#70464B',
   },
   checkoutLabel: {
     color: '#D8C3AB',
@@ -805,8 +795,8 @@ const styles = StyleSheet.create({
     fontSize: 22,
   },
   checkoutButton: {
-    backgroundColor: '#D94E28',
-    borderRadius: 16,
+    backgroundColor: '#68764A',
+    borderRadius: 7,
     paddingHorizontal: 18,
     paddingVertical: 12,
     flexDirection: 'row',
@@ -876,9 +866,9 @@ const styles = StyleSheet.create({
     opacity: 0.9,
   },
   modalButton: {
-    backgroundColor: '#D94E28',
+    backgroundColor: '#5A2630',
     paddingVertical: 14,
-    borderRadius: 16,
+    borderRadius: 7,
     alignItems: 'center',
     marginTop: 18,
   },
@@ -889,7 +879,7 @@ const styles = StyleSheet.create({
   },
   orderPage: {
     flex: 1,
-    backgroundColor: '#F8F3EE',
+    backgroundColor: '#F4EFE5',
     paddingHorizontal: 20,
     paddingTop: 52,
     paddingBottom: 28,
@@ -898,7 +888,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 24,
+    marginBottom: 16,
   },
   orderScroll: {
     flex: 1,
@@ -909,8 +899,8 @@ const styles = StyleSheet.create({
   backButton: {
     width: 40,
     height: 40,
-    borderRadius: 12,
-    backgroundColor: '#fff',
+    borderRadius: 7,
+    backgroundColor: '#E8E0D0',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -922,34 +912,31 @@ const styles = StyleSheet.create({
   orderTitle: {
     fontSize: 28,
     fontWeight: '900',
-    color: '#1C170F',
+    color: '#4D2530',
   },
   orderBadge: {
-    backgroundColor: '#FCEAE1',
-    borderRadius: 999,
+    backgroundColor: '#E8E0D0',
+    borderRadius: 6,
     paddingHorizontal: 10,
     paddingVertical: 6,
   },
   orderBadgeText: {
-    color: '#B0572F',
+    color: '#5A2630',
     fontWeight: '800',
     fontSize: 11,
   },
   orderSummaryCard: {
-    backgroundColor: '#fff',
-    borderRadius: 24,
+    backgroundColor: '#FBF8F1',
+    borderRadius: 8,
     padding: 18,
     marginBottom: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.06,
-    shadowRadius: 12,
-    elevation: 4,
+    borderWidth: 1,
+    borderColor: '#DDD2BF',
   },
   dozenDiscount: {
-    color: '#236648',
-    backgroundColor: '#E9F5ED',
-    borderRadius: 8,
+    color: '#56613C',
+    backgroundColor: '#E3E5D7',
+    borderRadius: 5,
     padding: 10,
     fontSize: 12,
     fontWeight: '800',
@@ -958,7 +945,7 @@ const styles = StyleSheet.create({
   summaryLabel: {
     fontSize: 16,
     fontWeight: '800',
-    color: '#211912',
+    color: '#4D2530',
     marginBottom: 12,
   },
   emptyState: {
@@ -995,13 +982,15 @@ const styles = StyleSheet.create({
   orderRowPrice: {
     fontSize: 15,
     fontWeight: '900',
-    color: '#D94E28',
+    color: '#5A2630',
   },
   deliveryCard: {
-    backgroundColor: '#fff',
-    borderRadius: 24,
+    backgroundColor: '#FBF8F1',
+    borderRadius: 8,
     padding: 18,
     marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#DDD2BF',
   },
   deliveryText: {
     color: '#584D48',
@@ -1010,8 +999,8 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   totalCard: {
-    backgroundColor: '#1C160F',
-    borderRadius: 24,
+    backgroundColor: '#4B252E',
+    borderRadius: 8,
     padding: 18,
     marginBottom: 18,
     flexDirection: 'row',
@@ -1029,8 +1018,8 @@ const styles = StyleSheet.create({
     fontWeight: '900',
   },
   confirmButton: {
-    backgroundColor: '#D94E28',
-    borderRadius: 18,
+    backgroundColor: '#68764A',
+    borderRadius: 7,
     paddingVertical: 16,
     alignItems: 'center',
   },
