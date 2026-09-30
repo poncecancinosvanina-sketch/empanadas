@@ -178,8 +178,8 @@ SELECT r.id AS recipe_id,
 WHERE r.active = true AND p.active = true
 GROUP BY r.id, p.id, p.name, p.sale_price, p.unit_sale_price, r.output_quantity, r.output_unit;
 
-  GRANT SELECT ON public.recipe_costs TO authenticated;
-  NOTIFY pgrst, 'reload schema';
+GRANT SELECT ON public.recipe_costs TO authenticated;
+NOTIFY pgrst, 'reload schema';
 
 CREATE OR REPLACE FUNCTION adjust_stock(
   p_stock_item_id uuid,
